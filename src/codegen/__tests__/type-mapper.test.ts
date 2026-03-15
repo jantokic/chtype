@@ -89,6 +89,55 @@ describe('mapClickHouseType', () => {
     });
   });
 
+  describe('insertCoerce option', () => {
+    const opts = { insertCoerce: true };
+
+    it('Decimal(18, 8) → number | string', () => {
+      expect(mapClickHouseType('Decimal(18, 8)', opts)).toBe('number | string');
+    });
+    it('DateTime64(3) → number | string', () => {
+      expect(mapClickHouseType('DateTime64(3)', opts)).toBe('number | string');
+    });
+    it('DateTime → number | string', () => {
+      expect(mapClickHouseType('DateTime', opts)).toBe('number | string');
+    });
+    it('Date → number | string', () => {
+      expect(mapClickHouseType('Date', opts)).toBe('number | string');
+    });
+    it('Date32 → number | string', () => {
+      expect(mapClickHouseType('Date32', opts)).toBe('number | string');
+    });
+    it('UInt64 → number | string', () => {
+      expect(mapClickHouseType('UInt64', opts)).toBe('number | string');
+    });
+    it('Int64 → number | string', () => {
+      expect(mapClickHouseType('Int64', opts)).toBe('number | string');
+    });
+    it('UInt64 with bigints → number | bigint', () => {
+      expect(mapClickHouseType('UInt64', { insertCoerce: true, bigints: true })).toBe(
+        'number | bigint',
+      );
+    });
+    it('String is unchanged', () => {
+      expect(mapClickHouseType('String', opts)).toBe('string');
+    });
+    it('UInt32 is unchanged (already number)', () => {
+      expect(mapClickHouseType('UInt32', opts)).toBe('number');
+    });
+    it('Bool is unchanged', () => {
+      expect(mapClickHouseType('Bool', opts)).toBe('boolean');
+    });
+    it('FixedString is unchanged', () => {
+      expect(mapClickHouseType('FixedString(32)', opts)).toBe('string');
+    });
+    it('Nullable(Decimal(18, 8)) → number | string | null', () => {
+      expect(mapClickHouseType('Nullable(Decimal(18, 8))', opts)).toBe('number | string | null');
+    });
+    it('Array(DateTime) → (number | string)[]', () => {
+      expect(mapClickHouseType('Array(DateTime)', opts)).toBe('(number | string)[]');
+    });
+  });
+
   describe('edge cases', () => {
     it('normalizes whitespace', () => {
       expect(mapClickHouseType('  Array( String )  ')).toBe('string[]');

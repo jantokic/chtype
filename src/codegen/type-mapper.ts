@@ -8,6 +8,13 @@
 export interface TypeMapperOptions {
   /** Map UInt64/Int64/UInt128/Int128/UInt256/Int256 to bigint instead of string */
   bigints?: boolean;
+  /**
+   * Emit coercible union types for Insert interfaces.
+   * ClickHouse auto-coerces number values for Decimal, DateTime, DateTime64,
+   * Date, Date32, UInt64/Int64/etc. columns. When true, these map to
+   * `number | string` instead of just `string`.
+   */
+  insertCoerce?: boolean;
 }
 
 const SCALAR_MAP: Record<string, string> = {
@@ -89,12 +96,18 @@ export function mapClickHouseType(chType: string, options: TypeMapperOptions = {
     return mapClickHouseType(aggMatch[1]!, options);
   }
 
-  if (t.startsWith('Decimal')) return 'string';
-  if (t.startsWith('DateTime64')) return 'string';
+  if (t.startsWith('Decimal')) return options.insertCoerce ? 'number | string' : 'string';
+  if (t.startsWith('DateTime64')) return options.insertCoerce ? 'number | string' : 'string';
   if (t.startsWith('FixedString')) return 'string';
 
   if (LARGE_INT_TYPES.has(t)) {
-    return options.bigints ? 'bigint' : 'string';
+    if (options.bigints) return options.insertCoerce ? 'number | bigint' : 'bigint';
+    return options.insertCoerce ? 'number | string' : 'string';
+  }
+
+  // DateTime and Date scalars — accept unix timestamps on insert
+  if (options.insertCoerce && (t === 'DateTime' || t === 'Date' || t === 'Date32')) {
+    return 'number | string';
   }
 
   return SCALAR_MAP[t] ?? 'unknown';

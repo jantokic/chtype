@@ -34,7 +34,7 @@ describe('generate', () => {
   it('makes DEFAULT columns optional in Insert', () => {
     const output = generate([sampleTable], { database: 'test_db' });
     expect(output).toContain('tags?: string[];');
-    expect(output).toContain('updated_at?: string;');
+    expect(output).toContain('updated_at?: number | string;');
   });
 
   it('excludes MATERIALIZED columns from Insert', () => {
@@ -89,7 +89,30 @@ describe('generate', () => {
       name: 'counters',
       columns: [{ name: 'count', type: 'UInt64', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false }],
     };
-    expect(generate([table], { database: 'test_db' })).toContain('count: string;');
-    expect(generate([table], { database: 'test_db', bigints: true })).toContain('count: bigint;');
+    const output = generate([table], { database: 'test_db' });
+    // Row type stays string, Insert type gets coercion
+    expect(output).toContain('export interface CountersRow {\n  count: string;\n}');
+    expect(output).toContain('export interface CountersInsert {\n  count: number | string;\n}');
+
+    const bigintOutput = generate([table], { database: 'test_db', bigints: true });
+    expect(bigintOutput).toContain('export interface CountersRow {\n  count: bigint;\n}');
+    expect(bigintOutput).toContain('export interface CountersInsert {\n  count: number | bigint;\n}');
+  });
+
+  it('applies insertCoerce to Insert but not Row', () => {
+    const table: IntrospectedTable = {
+      ...sampleTable,
+      name: 'snapshots',
+      columns: [
+        { name: 'id', type: 'String', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: true, isInPrimaryKey: true, isInPartitionKey: false },
+        { name: 'amount', type: 'Decimal(18, 8)', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+        { name: 'captured_at', type: 'DateTime', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+      ],
+    };
+    const output = generate([table], { database: 'test_db' });
+    // Row types: Decimal and DateTime stay as string
+    expect(output).toContain('export interface SnapshotsRow {\n  id: string;\n  amount: string;\n  captured_at: string;\n}');
+    // Insert types: Decimal and DateTime get number | string
+    expect(output).toContain('export interface SnapshotsInsert {\n  id: string;\n  amount: number | string;\n  captured_at: number | string;\n}');
   });
 });

@@ -71,8 +71,9 @@ function generateInsertInterface(table: IntrospectedTable, options: GeneratorOpt
 
   if (insertableColumns.length === 0) return '';
 
+  const insertOptions = { ...options, insertCoerce: true };
   const fields = insertableColumns.map((col) => {
-    const tsType = mapClickHouseType(col.type, options);
+    const tsType = mapClickHouseType(col.type, insertOptions);
     const optional = col.defaultKind === 'DEFAULT' ? '?' : '';
     const comment = col.comment ? `  /** ${col.comment} */\n` : '';
     return `${comment}  ${quoteProperty(col.name)}${optional}: ${tsType};`;
