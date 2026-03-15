@@ -24,6 +24,10 @@
     "./client": {
       "import": "./dist/client/index.js",
       "types": "./dist/client/index.d.ts"
+    },
+    "./migrate": {
+      "import": "./dist/migrate/index.js",
+      "types": "./dist/migrate/index.d.ts"
     }
   },
   "scripts": {
