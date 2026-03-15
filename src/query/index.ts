@@ -1,4 +1,4 @@
-export { createQueryBuilder, type QueryBuilder } from './query-builder.js';
+export { createQueryBuilder, type QueryBuilder, type WithBuilder } from './query-builder.js';
 export { SelectBuilder, unionAll, unionDistinct, intersect, except, setOperation } from './select-builder.js';
 export { InsertBuilder } from './insert-builder.js';
 export { DeleteBuilder } from './delete-builder.js';

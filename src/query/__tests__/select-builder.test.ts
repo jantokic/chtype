@@ -677,4 +677,67 @@ describe('SelectBuilder', () => {
       }).toThrow('Param name collision');
     });
   });
+
+  describe('qb.with() — CTE on QueryBuilder', () => {
+    it('builds CTE via qb.with().selectFrom()', () => {
+      const inner = qb.selectFrom('users').select(['user_id', 'name']);
+      const { sql } = qb
+        .with('active', inner)
+        .selectFrom('active')
+        .select(['user_id', 'name'])
+        .compile();
+      expect(sql).toContain('WITH active AS (SELECT user_id, name\nFROM users)');
+      expect(sql).toContain('SELECT user_id, name\nFROM active');
+    });
+
+    it('chains multiple CTEs', () => {
+      const cte1 = qb.selectFrom('users').select(['user_id']);
+      const cte2 = qb.selectFrom('events').select(['event_id']);
+      const { sql } = qb
+        .with('u', cte1)
+        .with('e', cte2)
+        .selectFrom('u')
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('WITH u AS (SELECT user_id\nFROM users)');
+      expect(sql).toContain('e AS (SELECT event_id\nFROM events)');
+      expect(sql).toContain('FROM u');
+    });
+
+    it('merges params from CTE and outer query', () => {
+      const inner = qb
+        .selectFrom('users')
+        .select(['user_id', 'score'])
+        .where('score', '>', qb.param('minScore', 'Float64'));
+      const { params } = qb
+        .with('top', inner)
+        .selectFrom('top')
+        .select(['user_id'])
+        .where('user_id', '!=', qb.param('excludeId', 'String'))
+        .compile();
+      expect(params).toHaveProperty('minScore');
+      expect(params).toHaveProperty('excludeId');
+    });
+
+    it('rejects invalid CTE names on qb.with()', () => {
+      const inner = qb.selectFrom('users').select(['user_id']);
+      expect(() => {
+        qb.with('bad; DROP TABLE', inner);
+      }).toThrow('Invalid CTE name');
+    });
+
+    it('works with tuple argMax in CTE', () => {
+      const base = qb
+        .selectFrom('users')
+        .select(['user_id', qb.fn.argMax('name', ['user_id', 'updated_at']).as('latest_name')])
+        .groupBy('user_id');
+      const { sql } = qb
+        .with('base', base)
+        .selectFrom('base')
+        .select(['user_id', 'latest_name'])
+        .compile();
+      expect(sql).toContain('argMax(name, (user_id, updated_at)) AS latest_name');
+      expect(sql).toContain('FROM base');
+    });
+  });
 });
