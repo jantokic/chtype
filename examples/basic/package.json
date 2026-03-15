@@ -1,9 +1,0 @@
-{
-  "name": "@chtype/example-basic",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@chtype/query": "workspace:*",
-    "@chtype/client": "workspace:*"
-  }
-}

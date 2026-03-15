@@ -1,28 +1,64 @@
 {
   "name": "chtype",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Type-safe ClickHouse toolkit for TypeScript — schema codegen, query builder, and enhanced client",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "chtype": "./dist/codegen/cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./codegen": {
+      "import": "./dist/codegen/index.js",
+      "types": "./dist/codegen/index.d.ts"
+    },
+    "./query": {
+      "import": "./dist/query/index.js",
+      "types": "./dist/query/index.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client/index.js",
+      "types": "./dist/client/index.d.ts"
+    }
+  },
   "scripts": {
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
-    "lint": "biome check .",
-    "lint:fix": "biome check --write .",
-    "format": "biome format --write .",
-    "clean": "turbo run clean",
-    "changeset": "changeset",
-    "release": "changeset publish"
+    "build": "tsc",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check": "bun test && tsc --noEmit"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^1.8.0",
+    "citty": "^0.1.6",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.0",
-    "@changesets/cli": "^2.27.0",
-    "@types/node": "^25.5.0",
-    "tsup": "^8.3.0",
-    "turbo": "^2.3.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.7.0"
   },
-  "packageManager": "pnpm@10.0.0",
+  "files": ["dist", "README.md", "LICENSE"],
+  "license": "MIT",
+  "keywords": [
+    "clickhouse",
+    "typescript",
+    "codegen",
+    "type-safe",
+    "query-builder",
+    "orm",
+    "schema",
+    "sql"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jantokic/chtype.git"
+  },
+  "homepage": "https://github.com/jantokic/chtype",
+  "author": "Jan Tokic",
   "engines": {
     "node": ">=20.0.0"
   }
