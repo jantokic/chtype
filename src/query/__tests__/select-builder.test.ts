@@ -415,6 +415,28 @@ describe('SelectBuilder', () => {
     });
   });
 
+  describe('SAMPLE', () => {
+    it('builds SAMPLE with ratio', () => {
+      const { sql } = qb.selectFrom('users').select(['user_id']).sample(0.1).compile();
+      expect(sql).toContain('FROM users SAMPLE 0.1');
+    });
+
+    it('builds SAMPLE with ratio and offset', () => {
+      const { sql } = qb.selectFrom('users').select(['user_id']).sample(0.1, 0.5).compile();
+      expect(sql).toContain('FROM users SAMPLE 0.1 OFFSET 0.5');
+    });
+
+    it('builds SAMPLE with absolute count', () => {
+      const { sql } = qb.selectFrom('users').select(['user_id']).sample(10000).compile();
+      expect(sql).toContain('FROM users SAMPLE 10000');
+    });
+
+    it('combines SAMPLE with FINAL', () => {
+      const { sql } = qb.selectFrom('users').select(['user_id']).final().sample(0.1).compile();
+      expect(sql).toContain('FROM users FINAL SAMPLE 0.1');
+    });
+  });
+
   describe('Subqueries', () => {
     it('builds WHERE IN (subquery)', () => {
       const inner = qb.selectFrom('events').select(['event_id']);

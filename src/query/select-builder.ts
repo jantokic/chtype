@@ -67,6 +67,8 @@ export class SelectBuilder<
   private _limit: number | Param | null = null;
   private _offset: number | Param | null = null;
   private _final = false;
+  private _sample: number | null = null;
+  private _sampleOffset: number | null = null;
   private _settings: Record<string, string | number | boolean> = {};
 
   constructor(table: T) {
@@ -256,6 +258,19 @@ export class SelectBuilder<
     return this;
   }
 
+  /**
+   * Add SAMPLE clause (ClickHouse-specific approximate query optimization).
+   * @param ratio — fraction (0-1) or absolute row count (>= 1)
+   * @param offset — optional OFFSET for reproducible sampling (0-1)
+   */
+  sample(ratio: number, offset?: number): this {
+    this._sample = ratio;
+    if (offset !== undefined) {
+      this._sampleOffset = offset;
+    }
+    return this;
+  }
+
   /** Add SETTINGS clause. Keys and string values are validated to prevent injection. */
   settings(s: Record<string, string | number | boolean>): this {
     for (const [key, val] of Object.entries(s)) {
@@ -293,7 +308,12 @@ export class SelectBuilder<
     const tableName = this._table as string;
     const tableRef = this._tableAlias ? `${tableName} AS ${this._tableAlias}` : tableName;
     const finalMod = this._final ? ' FINAL' : '';
-    parts.push(`FROM ${tableRef}${finalMod}`);
+    const sampleMod = this._sample !== null
+      ? this._sampleOffset !== null
+        ? ` SAMPLE ${this._sample} OFFSET ${this._sampleOffset}`
+        : ` SAMPLE ${this._sample}`
+      : '';
+    parts.push(`FROM ${tableRef}${finalMod}${sampleMod}`);
 
     for (const j of this._joins) {
       const joinTable = j.alias ? `${j.table} AS ${j.alias}` : j.table;

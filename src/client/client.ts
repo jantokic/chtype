@@ -15,6 +15,9 @@ export interface ChtypeClient<DB extends DatabaseSchema> {
   /** Execute a compiled query and return typed rows. */
   execute<T = Record<string, unknown>>(query: CompiledQuery): Promise<T[]>;
 
+  /** Execute a compiled query and return a typed async iterable for streaming large result sets. */
+  stream<T = Record<string, unknown>>(query: CompiledQuery): AsyncIterable<T[]>;
+
   /** Execute a raw SQL query with optional parameters. */
   query<T = Record<string, unknown>>(sql: string, params?: Record<string, unknown>): Promise<T[]>;
 
@@ -61,6 +64,18 @@ export function createClient<DB extends DatabaseSchema>(
         format: 'JSONEachRow',
       });
       return result.json<T>();
+    },
+
+    async *stream<T = Record<string, unknown>>(query: CompiledQuery): AsyncIterable<T[]> {
+      const result = await client.query({
+        query: query.sql,
+        query_params: query.params,
+        format: 'JSONEachRow',
+      });
+      const stream = result.stream<T>();
+      for await (const rows of stream) {
+        yield rows.json();
+      }
     },
 
     async query<T = Record<string, unknown>>(

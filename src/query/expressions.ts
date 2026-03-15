@@ -114,6 +114,170 @@ export const fn = {
   toStartOfHour(column: string): Expression {
     return new Expression(`toStartOfHour(${column})`);
   },
+  // --- Array functions ---
+
+  arrayMap(lambda: string, column: string): Expression {
+    return new Expression(`arrayMap(${lambda}, ${column})`);
+  },
+  arrayFilter(lambda: string, column: string): Expression {
+    return new Expression(`arrayFilter(${lambda}, ${column})`);
+  },
+  arrayExists(lambda: string, column: string): Expression {
+    return new Expression(`arrayExists(${lambda}, ${column})`);
+  },
+  arrayAll(lambda: string, column: string): Expression {
+    return new Expression(`arrayAll(${lambda}, ${column})`);
+  },
+  arraySort(column: string): Expression {
+    return new Expression(`arraySort(${column})`);
+  },
+  arrayReverse(column: string): Expression {
+    return new Expression(`arrayReverse(${column})`);
+  },
+  arrayDistinct(column: string): Expression {
+    return new Expression(`arrayDistinct(${column})`);
+  },
+  arrayFlatten(column: string): Expression {
+    return new Expression(`arrayFlatten(${column})`);
+  },
+  arrayConcat(...columns: string[]): Expression {
+    return new Expression(`arrayConcat(${columns.join(', ')})`);
+  },
+  arraySlice(column: string, offset: number, length?: number): Expression {
+    const args = length !== undefined ? `${column}, ${offset}, ${length}` : `${column}, ${offset}`;
+    return new Expression(`arraySlice(${args})`);
+  },
+  length(column: string): Expression {
+    return new Expression(`length(${column})`);
+  },
+  has(column: string, element: string): Expression {
+    return new Expression(`has(${column}, ${element})`);
+  },
+  indexOf(column: string, element: string): Expression {
+    return new Expression(`indexOf(${column}, ${element})`);
+  },
+
+  // --- Map functions ---
+
+  mapKeys(column: string): Expression {
+    return new Expression(`mapKeys(${column})`);
+  },
+  mapValues(column: string): Expression {
+    return new Expression(`mapValues(${column})`);
+  },
+  mapContains(column: string, key: string): Expression {
+    return new Expression(`mapContains(${column}, ${key})`);
+  },
+
+  // --- Tuple functions ---
+
+  tupleElement(column: string, index: number): Expression {
+    return new Expression(`tupleElement(${column}, ${index})`);
+  },
+
+  // --- Date/time functions ---
+
+  toStartOfWeek(column: string): Expression {
+    return new Expression(`toStartOfWeek(${column})`);
+  },
+  toStartOfMonth(column: string): Expression {
+    return new Expression(`toStartOfMonth(${column})`);
+  },
+  toStartOfYear(column: string): Expression {
+    return new Expression(`toStartOfYear(${column})`);
+  },
+  toStartOfMinute(column: string): Expression {
+    return new Expression(`toStartOfMinute(${column})`);
+  },
+  toDate(column: string): Expression {
+    return new Expression(`toDate(${column})`);
+  },
+  toDateTime(column: string): Expression {
+    return new Expression(`toDateTime(${column})`);
+  },
+  now(): Expression {
+    return new Expression('now()');
+  },
+  today(): Expression {
+    return new Expression('today()');
+  },
+  dateDiff(unit: string, start: string, end: string): Expression {
+    return new Expression(`dateDiff('${unit}', ${start}, ${end})`);
+  },
+
+  // --- String functions ---
+
+  lower(column: string): Expression {
+    return new Expression(`lower(${column})`);
+  },
+  upper(column: string): Expression {
+    return new Expression(`upper(${column})`);
+  },
+  trim(column: string): Expression {
+    return new Expression(`trimBoth(${column})`);
+  },
+  concat(...columns: string[]): Expression {
+    return new Expression(`concat(${columns.join(', ')})`);
+  },
+  substring(column: string, offset: number, length?: number): Expression {
+    const args = length !== undefined ? `${column}, ${offset}, ${length}` : `${column}, ${offset}`;
+    return new Expression(`substring(${args})`);
+  },
+
+  // --- Conditional ---
+
+  if_(condition: string, then: string, else_: string): Expression {
+    return new Expression(`if(${condition}, ${then}, ${else_})`);
+  },
+  multiIf(...args: string[]): Expression {
+    return new Expression(`multiIf(${args.join(', ')})`);
+  },
+  coalesce(...columns: string[]): Expression {
+    return new Expression(`coalesce(${columns.join(', ')})`);
+  },
+
+  // --- Type conversion ---
+
+  toUInt32(column: string): Expression {
+    return new Expression(`toUInt32(${column})`);
+  },
+  toUInt64(column: string): Expression {
+    return new Expression(`toUInt64(${column})`);
+  },
+  toInt32(column: string): Expression {
+    return new Expression(`toInt32(${column})`);
+  },
+  toFloat64(column: string): Expression {
+    return new Expression(`toFloat64(${column})`);
+  },
+  toString_(column: string): Expression {
+    return new Expression(`toString(${column})`);
+  },
+
+  // --- Aggregate (additional) ---
+
+  quantile(level: number, column: string): Expression {
+    return new Expression(`quantile(${level})(${column})`);
+  },
+  median(column: string): Expression {
+    return new Expression(`median(${column})`);
+  },
+  any(column: string): Expression {
+    return new Expression(`any(${column})`);
+  },
+  anyLast(column: string): Expression {
+    return new Expression(`anyLast(${column})`);
+  },
+  sumIf(column: string, condition: string): Expression {
+    return new Expression(`sumIf(${column}, ${condition})`);
+  },
+  countIf(condition: string): Expression {
+    return new Expression(`countIf(${condition})`);
+  },
+  avgIf(column: string, condition: string): Expression {
+    return new Expression(`avgIf(${column}, ${condition})`);
+  },
+
   /** Raw SQL expression — escape hatch for anything not covered. */
   raw(sql: string): Expression {
     return new Expression(sql);
