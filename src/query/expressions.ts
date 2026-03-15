@@ -72,11 +72,13 @@ export class Subquery extends Expression {
 
 /** ClickHouse function builders. */
 export const fn = {
-  argMax(column: string, versionColumn: string): Expression {
-    return new Expression(`argMax(${column}, ${versionColumn})`);
+  argMax(column: string, versionColumn: string | string[]): Expression {
+    const ver = Array.isArray(versionColumn) ? `(${versionColumn.join(', ')})` : versionColumn;
+    return new Expression(`argMax(${column}, ${ver})`);
   },
-  argMin(column: string, versionColumn: string): Expression {
-    return new Expression(`argMin(${column}, ${versionColumn})`);
+  argMin(column: string, versionColumn: string | string[]): Expression {
+    const ver = Array.isArray(versionColumn) ? `(${versionColumn.join(', ')})` : versionColumn;
+    return new Expression(`argMin(${column}, ${ver})`);
   },
   count(column?: string): Expression {
     return new Expression(column ? `count(${column})` : 'count()');

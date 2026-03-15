@@ -2,6 +2,29 @@ import { describe, expect, it } from 'bun:test';
 import { fn } from '../expressions.js';
 
 describe('fn — function helpers', () => {
+  describe('argMax / argMin', () => {
+    it('argMax with single version column', () => {
+      expect(fn.argMax('amount', 'updated_at').sql).toBe('argMax(amount, updated_at)');
+    });
+
+    it('argMax with tuple version columns', () => {
+      expect(fn.argMax('amount', ['vid', 'updated_at']).sql).toBe('argMax(amount, (vid, updated_at))');
+    });
+
+    it('argMin with single version column', () => {
+      expect(fn.argMin('amount', 'updated_at').sql).toBe('argMin(amount, updated_at)');
+    });
+
+    it('argMin with tuple version columns', () => {
+      expect(fn.argMin('amount', ['vid', 'updated_at']).sql).toBe('argMin(amount, (vid, updated_at))');
+    });
+
+    it('argMax with tuple and alias', () => {
+      expect(fn.argMax('amount', ['vid', 'updated_at']).as('latest_amount').toString())
+        .toBe('argMax(amount, (vid, updated_at)) AS latest_amount');
+    });
+  });
+
   describe('Array functions', () => {
     it('arrayMap', () => {
       expect(fn.arrayMap('x -> x * 2', 'nums').sql).toBe('arrayMap(x -> x * 2, nums)');
