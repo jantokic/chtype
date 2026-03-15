@@ -12,6 +12,7 @@ export type {
   InsertType,
   ColumnName,
   CompiledQuery,
+  SelectResult,
   SortDirection,
   ComparisonOp,
   SetOp,

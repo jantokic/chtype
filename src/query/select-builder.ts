@@ -130,7 +130,7 @@ export class SelectBuilder<
   }
 
   select<C extends ColumnName<DB, T>, E extends Expression & { alias: string }>(
-    columns: (C | E)[],
+    columns: (C | E | Expression)[],
   ): SelectBuilder<DB, T, C | (E extends { alias: infer A extends string } ? A : never)> {
     this._columns = columns;
     return this as unknown as SelectBuilder<DB, T, C | (E extends { alias: infer A extends string } ? A : never)>;
