@@ -528,6 +528,25 @@ describe('SelectBuilder', () => {
         .compile();
       expect(sql).toContain('PREWHERE score > {min:Float64} AND name != {name:String}');
     });
+
+    it('builds PREWHERE with IN (subquery)', () => {
+      const inner = qb.selectFrom('events').select(['event_id']);
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .prewhere('user_id', 'IN', qb.subquery(inner))
+        .compile();
+      expect(sql).toContain('PREWHERE user_id IN (SELECT event_id\nFROM events)');
+    });
+
+    it('builds PREWHERE with NOT IN', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .prewhere('user_id', 'NOT IN', qb.param('ids', 'Array(String)'))
+        .compile();
+      expect(sql).toContain('PREWHERE user_id NOT IN {ids:Array(String)}');
+    });
   });
 
   describe('WITH / CTE', () => {
@@ -546,7 +565,7 @@ describe('SelectBuilder', () => {
       expect(params).toHaveProperty('min');
     });
 
-    it('builds multiple CTEs', () => {
+    it('builds multiple CTEs in a single WITH block', () => {
       const cte1 = qb.selectFrom('users').select(['user_id']);
       const cte2 = qb.selectFrom('events').select(['event_id']);
       const { sql } = qb
@@ -557,6 +576,9 @@ describe('SelectBuilder', () => {
         .compile();
       expect(sql).toContain('WITH active AS (SELECT user_id\nFROM users)');
       expect(sql).toContain('recent AS (SELECT event_id\nFROM events)');
+      // Verify both CTEs are in the same WITH block (only one WITH keyword)
+      const withCount = sql.split('WITH').length - 1;
+      expect(withCount).toBe(1);
     });
 
     it('places WITH before SELECT', () => {
@@ -596,6 +618,41 @@ describe('SelectBuilder', () => {
         .compile();
       expect(params).toHaveProperty('cteMin');
       expect(params).toHaveProperty('name');
+    });
+
+    it('rejects invalid CTE names', () => {
+      const inner = qb.selectFrom('users').select(['user_id']);
+      expect(() => {
+        qb.selectFrom('users').with('bad; DROP TABLE users; --', inner);
+      }).toThrow('Invalid CTE name');
+    });
+
+    it('throws on param name collision between subquery and outer query', () => {
+      const inner = qb
+        .selectFrom('events')
+        .select(['event_id'])
+        .where('type', '=', qb.param('val', 'String'));
+      expect(() => {
+        qb.selectFrom('users')
+          .select(['user_id'])
+          .where('user_id', 'IN', qb.subquery(inner))
+          .where('score', '>', qb.param('val', 'Float64'))
+          .compile();
+      }).toThrow('Param name collision');
+    });
+
+    it('throws on param name collision between CTE and outer query', () => {
+      const inner = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('score', '>', qb.param('val', 'Float64'));
+      expect(() => {
+        qb.selectFrom('users')
+          .with('active', inner)
+          .select(['user_id'])
+          .where('name', '=', qb.param('val', 'String'))
+          .compile();
+      }).toThrow('Param name collision');
     });
   });
 });

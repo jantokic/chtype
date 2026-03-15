@@ -22,8 +22,8 @@ import type {
 import { ConditionGroup, Expression, Subquery } from './expressions.js';
 import { Param } from './param.js';
 
-/** Valid ClickHouse setting name pattern. */
-const VALID_SETTING_KEY = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+/** Valid SQL identifier pattern (settings keys, CTE names, etc.). */
+const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 type WhereClause =
   | { kind: 'comparison'; column: string; op: ComparisonOp | SetOp; value: Param | Expression }
@@ -87,7 +87,10 @@ export class SelectBuilder<
   }
 
   /** Add a WITH (CTE) clause. The subquery is compiled and prepended to the query. */
-  with(name: string, subquery: Subquery | { compile(): { sql: string; params: Record<string, unknown> } }): this {
+  with(name: string, subquery: Subquery | { compile(): CompiledQuery }): this {
+    if (!VALID_IDENTIFIER.test(name)) {
+      throw new Error(`Invalid CTE name: "${name}"`);
+    }
     const sub = subquery instanceof Subquery ? subquery : new Subquery(subquery.compile());
     this._ctes.push({ name, subquery: sub });
     return this;
@@ -298,7 +301,7 @@ export class SelectBuilder<
   /** Add SETTINGS clause. Keys and string values are validated to prevent injection. */
   settings(s: Record<string, string | number | boolean>): this {
     for (const [key, val] of Object.entries(s)) {
-      if (!VALID_SETTING_KEY.test(key)) {
+      if (!VALID_IDENTIFIER.test(key)) {
         throw new Error(`Invalid ClickHouse setting name: "${key}"`);
       }
       if (typeof val === 'string' && val.includes("'")) {
@@ -310,13 +313,13 @@ export class SelectBuilder<
   }
 
   compile(): CompiledQuery {
-    const params: Record<string, unknown> = {};
+    const ctx: CompileContext = { params: {}, externalParams: new Set() };
     const parts: string[] = [];
 
     // WITH (CTE) clauses
     if (this._ctes.length > 0) {
       const cteParts = this._ctes.map((cte) => {
-        Object.assign(params, cte.subquery.subqueryParams);
+        mergeParams(ctx, cte.subquery.subqueryParams);
         return `${cte.name} AS ${cte.subquery.sql}`;
       });
       parts.push(`WITH ${cteParts.join(',\n')}`);
@@ -345,12 +348,12 @@ export class SelectBuilder<
 
     // PREWHERE (ClickHouse-specific, before WHERE)
     if (this._prewheres.length > 0) {
-      const conditions = this._prewheres.map((w) => renderWhereClause(w, params));
+      const conditions = this._prewheres.map((w) => renderWhereClause(w, ctx));
       parts.push(`PREWHERE ${conditions.join(' AND ')}`);
     }
 
     if (this._wheres.length > 0) {
-      const conditions = this._wheres.map((w) => renderWhereClause(w, params));
+      const conditions = this._wheres.map((w) => renderWhereClause(w, ctx));
       parts.push(`WHERE ${conditions.join(' AND ')}`);
     }
 
@@ -359,7 +362,7 @@ export class SelectBuilder<
     }
 
     if (this._havings.length > 0) {
-      const conditions = this._havings.map((h) => renderWhereClause(h, params));
+      const conditions = this._havings.map((h) => renderWhereClause(h, ctx));
       parts.push(`HAVING ${conditions.join(' AND ')}`);
     }
 
@@ -369,11 +372,11 @@ export class SelectBuilder<
     }
 
     if (this._limit !== null) {
-      parts.push(`LIMIT ${renderValue(this._limit, params)}`);
+      parts.push(`LIMIT ${renderValue(this._limit, ctx)}`);
     }
 
     if (this._offset !== null) {
-      parts.push(`OFFSET ${renderValue(this._offset, params)}`);
+      parts.push(`OFFSET ${renderValue(this._offset, ctx)}`);
     }
 
     const settingsEntries = Object.entries(this._settings);
@@ -384,17 +387,37 @@ export class SelectBuilder<
       parts.push(`SETTINGS ${settingsStr}`);
     }
 
-    return { sql: parts.join('\n'), params };
+    return { sql: parts.join('\n'), params: ctx.params };
   }
 }
 
-function renderValue(value: number | Param | Expression, params: Record<string, unknown>): string {
+/** Tracks params and their origin during compilation. */
+interface CompileContext {
+  params: Record<string, unknown>;
+  /** Param names that came from subqueries/CTEs (external sources). */
+  externalParams: Set<string>;
+}
+
+function mergeParams(ctx: CompileContext, source: Record<string, unknown>): void {
+  for (const key of Object.keys(source)) {
+    if (key in ctx.params) {
+      throw new Error(`Param name collision: "${key}" is used in both the subquery/CTE and outer query`);
+    }
+    ctx.params[key] = source[key];
+    ctx.externalParams.add(key);
+  }
+}
+
+function renderValue(value: number | Param | Expression, ctx: CompileContext): string {
   if (value instanceof Subquery) {
-    Object.assign(params, value.subqueryParams);
+    mergeParams(ctx, value.subqueryParams);
     return value.sql;
   }
   if (value instanceof Param) {
-    params[value.name] = undefined;
+    if (ctx.externalParams.has(value.name)) {
+      throw new Error(`Param name collision: "${value.name}" is used in both the subquery/CTE and outer query`);
+    }
+    ctx.params[value.name] = undefined;
     return value.toString();
   }
   if (value instanceof Expression) {
@@ -404,23 +427,26 @@ function renderValue(value: number | Param | Expression, params: Record<string, 
   return String(value);
 }
 
-function renderWhereClause(w: WhereClause, params: Record<string, unknown>): string {
+function renderWhereClause(w: WhereClause, ctx: CompileContext): string {
   switch (w.kind) {
     case 'comparison': {
-      const val = renderValue(w.value, params);
+      const val = renderValue(w.value, ctx);
       return `${w.column} ${w.op} ${val}`;
     }
     case 'unary':
       return `${w.column} ${w.op}`;
     case 'between': {
-      const low = renderValue(w.low, params);
-      const high = renderValue(w.high, params);
+      const low = renderValue(w.low, ctx);
+      const high = renderValue(w.high, ctx);
       return `${w.column} ${w.op} ${low} AND ${high}`;
     }
     case 'expression': {
       if (w.expr instanceof ConditionGroup) {
         for (const p of w.expr.params) {
-          params[p.name] = undefined;
+          if (ctx.externalParams.has(p.name)) {
+            throw new Error(`Param name collision: "${p.name}" is used in both the subquery/CTE and outer query`);
+          }
+          ctx.params[p.name] = undefined;
         }
       }
       return w.expr.sql;
