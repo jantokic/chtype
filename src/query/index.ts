@@ -5,6 +5,7 @@ export { DeleteBuilder } from './delete-builder.js';
 export { UpdateBuilder } from './update-builder.js';
 export { Expression, ConditionGroup, Subquery, fn, or, and } from './expressions.js';
 export { Param, param, type ClickHouseParamType } from './param.js';
+export { sql, type SqlInterpolation } from './sql-template.js';
 export type {
   DatabaseSchema,
   TableName,
