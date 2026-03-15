@@ -13,7 +13,7 @@ export interface QueryBuilder<DB extends DatabaseSchema> {
   update<T extends TableName<DB>>(table: T): UpdateBuilder<DB, T>;
   param(name: string, type: ClickHouseParamType): Param;
   /** Wrap a compiled query as a subquery expression for use in WHERE IN / NOT IN. */
-  subquery(builder: { compile(): CompiledQuery }): Subquery;
+  subquery(builder: { compile(): CompiledQuery<unknown> }): Subquery;
   fn: typeof fn;
 }
 
@@ -51,7 +51,7 @@ export function createQueryBuilder<DB extends DatabaseSchema>(): QueryBuilder<DB
     param(name: string, type: ClickHouseParamType) {
       return new Param(name, type);
     },
-    subquery(builder: { compile(): CompiledQuery }) {
+    subquery(builder: { compile(): CompiledQuery<unknown> }) {
       return new Subquery(builder.compile());
     },
     fn,

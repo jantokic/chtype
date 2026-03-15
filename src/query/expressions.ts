@@ -1,15 +1,15 @@
 import type { CompiledQuery } from './types.js';
 import { Param } from './param.js';
 
-/** Represents a raw SQL expression with an optional alias. */
-export class Expression {
+/** Represents a raw SQL expression with an optional alias. TType carries the result type for typed expressions. */
+export class Expression<TType = unknown> {
   constructor(
     public readonly sql: string,
     public readonly alias?: string,
   ) {}
 
-  as(alias: string): Expression {
-    return new Expression(this.sql, alias);
+  as<A extends string>(alias: A): Expression<TType> & { alias: A } {
+    return new Expression<TType>(this.sql, alias) as Expression<TType> & { alias: A };
   }
 
   toString(): string {
@@ -64,7 +64,7 @@ export function and(...conditions: (ConditionTuple | Expression)[]): ConditionGr
 export class Subquery extends Expression {
   readonly subqueryParams: Record<string, unknown>;
 
-  constructor(compiled: CompiledQuery) {
+  constructor(compiled: CompiledQuery<unknown>) {
     super(`(${compiled.sql})`);
     this.subqueryParams = compiled.params;
   }
