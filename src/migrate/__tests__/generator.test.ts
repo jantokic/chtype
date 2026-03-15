@@ -262,4 +262,95 @@ describe('generateSQL', () => {
     expect(stmts[1]).toBe('DROP TABLE legacy');
     expect(stmts[2]).toContain('ALTER TABLE users ADD COLUMN email String');
   });
+
+  it('passes options through to all generators', () => {
+    const diff: SchemaDiff = {
+      isEmpty: false,
+      tables: [
+        { action: 'add', table: 'events', definition: makeTable({ name: 'events' }) },
+        { action: 'drop', table: 'legacy' },
+        {
+          action: 'modify',
+          table: 'users',
+          columns: [
+            { action: 'add', column: makeColumn({ name: 'email', type: 'String' }) },
+            { action: 'drop', column: makeColumn({ name: 'old' }) },
+          ],
+        },
+      ],
+    };
+    const stmts = generateSQL(diff, { idempotent: true, cluster: "'{cluster}'" });
+    expect(stmts[0]).toContain("CREATE TABLE IF NOT EXISTS events ON CLUSTER '{cluster}'");
+    expect(stmts[1]).toBe("DROP TABLE IF EXISTS legacy ON CLUSTER '{cluster}'");
+    expect(stmts[2]).toContain("ON CLUSTER '{cluster}' ADD COLUMN IF NOT EXISTS email");
+    expect(stmts[3]).toContain("ON CLUSTER '{cluster}' DROP COLUMN IF EXISTS old");
+  });
+});
+
+describe('idempotent option', () => {
+  it('CREATE TABLE IF NOT EXISTS', () => {
+    const table = makeTable({ name: 'events' });
+    const sql = generateCreateTable(table, { idempotent: true });
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS events');
+  });
+
+  it('DROP TABLE IF EXISTS', () => {
+    const sql = generateDropTable('old_table', { idempotent: true });
+    expect(sql).toBe('DROP TABLE IF EXISTS old_table');
+  });
+
+  it('ADD COLUMN IF NOT EXISTS', () => {
+    const columns: ColumnDiff[] = [
+      { action: 'add', column: makeColumn({ name: 'email', type: 'String' }) },
+    ];
+    const stmts = generateAlterTable('users', columns, { idempotent: true });
+    expect(stmts[0]).toBe('ALTER TABLE users ADD COLUMN IF NOT EXISTS email String');
+  });
+
+  it('DROP COLUMN IF EXISTS', () => {
+    const columns: ColumnDiff[] = [
+      { action: 'drop', column: makeColumn({ name: 'legacy_field' }) },
+    ];
+    const stmts = generateAlterTable('users', columns, { idempotent: true });
+    expect(stmts[0]).toBe('ALTER TABLE users DROP COLUMN IF EXISTS legacy_field');
+  });
+
+  it('MODIFY COLUMN is unchanged (no IF EXISTS needed)', () => {
+    const columns: ColumnDiff[] = [
+      {
+        action: 'modify',
+        column: makeColumn({ name: 'count', type: 'UInt64' }),
+        previous: makeColumn({ name: 'count', type: 'UInt32' }),
+      },
+    ];
+    const stmts = generateAlterTable('events', columns, { idempotent: true });
+    expect(stmts[0]).toBe('ALTER TABLE events MODIFY COLUMN count UInt64');
+  });
+});
+
+describe('ON CLUSTER option', () => {
+  it('CREATE TABLE ON CLUSTER', () => {
+    const table = makeTable({ name: 'events' });
+    const sql = generateCreateTable(table, { cluster: "'{cluster}'" });
+    expect(sql).toContain("CREATE TABLE events ON CLUSTER '{cluster}'");
+  });
+
+  it('DROP TABLE ON CLUSTER', () => {
+    const sql = generateDropTable('old_table', { cluster: "'{cluster}'" });
+    expect(sql).toBe("DROP TABLE old_table ON CLUSTER '{cluster}'");
+  });
+
+  it('ALTER TABLE ON CLUSTER', () => {
+    const columns: ColumnDiff[] = [
+      { action: 'add', column: makeColumn({ name: 'email', type: 'String' }) },
+    ];
+    const stmts = generateAlterTable('users', columns, { cluster: "'{cluster}'" });
+    expect(stmts[0]).toBe("ALTER TABLE users ON CLUSTER '{cluster}' ADD COLUMN email String");
+  });
+
+  it('combines idempotent and cluster options', () => {
+    const table = makeTable({ name: 'events' });
+    const sql = generateCreateTable(table, { idempotent: true, cluster: "'{cluster}'" });
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS events ON CLUSTER '{cluster}'");
+  });
 });

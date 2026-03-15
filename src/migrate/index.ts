@@ -11,6 +11,7 @@ export {
   generateCreateTable,
   generateDropTable,
   generateAlterTable,
+  type GenerateOptions,
 } from './generator.js';
 export {
   createSnapshot,
