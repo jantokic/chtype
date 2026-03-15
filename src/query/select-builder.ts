@@ -7,6 +7,7 @@
  */
 
 import type {
+  BetweenOp,
   ColumnName,
   CompiledQuery,
   ComparisonOp,
@@ -15,19 +16,20 @@ import type {
   SetOp,
   SortDirection,
   TableName,
+  UnaryOp,
   WhereOp,
 } from './types.js';
-import { Expression } from './expressions.js';
+import { ConditionGroup, Expression } from './expressions.js';
 import { Param } from './param.js';
 
 /** Valid ClickHouse setting name pattern. */
 const VALID_SETTING_KEY = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
-interface WhereClause {
-  column: string;
-  op: WhereOp;
-  value: Param | Expression;
-}
+type WhereClause =
+  | { kind: 'comparison'; column: string; op: ComparisonOp | SetOp; value: Param | Expression }
+  | { kind: 'unary'; column: string; op: UnaryOp }
+  | { kind: 'between'; column: string; op: BetweenOp; low: Param | Expression; high: Param | Expression }
+  | { kind: 'expression'; expr: Expression };
 
 interface JoinClause {
   type: JoinType;
@@ -50,6 +52,7 @@ export class SelectBuilder<
   private _table: T;
   private _tableAlias?: string;
   private _columns: (string | Expression)[] = [];
+  private _distinct = false;
   private _wheres: WhereClause[] = [];
   private _joins: JoinClause[] = [];
   private _groupBy: string[] = [];
@@ -67,6 +70,12 @@ export class SelectBuilder<
   /** Alias the main table (useful with JOINs). */
   as(alias: string): this {
     this._tableAlias = alias;
+    return this;
+  }
+
+  /** Add DISTINCT to the SELECT clause. */
+  distinct(): this {
+    this._distinct = true;
     return this;
   }
 
@@ -89,13 +98,46 @@ export class SelectBuilder<
     op: SetOp,
     value: Param | Expression,
   ): this;
+  /** Add a WHERE IS NULL / IS NOT NULL condition (no value). */
   where(
     column: ColumnName<DB, T> | Expression | string,
-    op: WhereOp,
-    value: Param | Expression,
+    op: UnaryOp,
+  ): this;
+  /** Add a WHERE BETWEEN condition with a [low, high] range. */
+  where(
+    column: ColumnName<DB, T> | Expression | string,
+    op: BetweenOp,
+    value: [Param | Expression, Param | Expression],
+  ): this;
+  /** Add a pre-built condition group (from `or()` / `and()`). */
+  where(condition: Expression): this;
+  where(
+    columnOrCondition: ColumnName<DB, T> | Expression | string,
+    op?: WhereOp,
+    value?: Param | Expression | [Param | Expression, Param | Expression],
   ): this {
-    const col = column instanceof Expression ? column.sql : column;
-    this._wheres.push({ column: col, op, value });
+    // Expression-only overload: where(or(...)) or where(and(...))
+    if (columnOrCondition instanceof Expression && op === undefined) {
+      this._wheres.push({ kind: 'expression', expr: columnOrCondition });
+      return this;
+    }
+
+    const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
+
+    // Unary: IS NULL / IS NOT NULL
+    if (op === 'IS NULL' || op === 'IS NOT NULL') {
+      this._wheres.push({ kind: 'unary', column: col, op });
+      return this;
+    }
+
+    // Between: BETWEEN / NOT BETWEEN
+    if ((op === 'BETWEEN' || op === 'NOT BETWEEN') && Array.isArray(value)) {
+      this._wheres.push({ kind: 'between', column: col, op, low: value[0], high: value[1] });
+      return this;
+    }
+
+    // Standard comparison or set op
+    this._wheres.push({ kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression });
     return this;
   }
 
@@ -151,9 +193,19 @@ export class SelectBuilder<
     return this;
   }
 
-  having(column: string | Expression, op: ComparisonOp, value: Param | Expression): this {
-    const col = column instanceof Expression ? column.sql : column;
-    this._havings.push({ column: col, op, value });
+  having(column: string | Expression, op: ComparisonOp, value: Param | Expression): this;
+  having(condition: Expression): this;
+  having(
+    columnOrCondition: string | Expression,
+    op?: ComparisonOp,
+    value?: Param | Expression,
+  ): this {
+    if (columnOrCondition instanceof Expression && op === undefined) {
+      this._havings.push({ kind: 'expression', expr: columnOrCondition });
+      return this;
+    }
+    const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : columnOrCondition;
+    this._havings.push({ kind: 'comparison', column: col, op: op!, value: value! });
     return this;
   }
 
@@ -198,7 +250,8 @@ export class SelectBuilder<
       this._columns.length > 0
         ? this._columns.map((c) => (c instanceof Expression ? c.toString() : c)).join(', ')
         : '*';
-    parts.push(`SELECT ${selectList}`);
+    const distinctMod = this._distinct ? 'DISTINCT ' : '';
+    parts.push(`SELECT ${distinctMod}${selectList}`);
 
     const tableName = this._table as string;
     const tableRef = this._tableAlias ? `${tableName} AS ${this._tableAlias}` : tableName;
@@ -215,10 +268,7 @@ export class SelectBuilder<
     }
 
     if (this._wheres.length > 0) {
-      const conditions = this._wheres.map((w) => {
-        const val = renderValue(w.value, params);
-        return `${w.column} ${w.op} ${val}`;
-      });
+      const conditions = this._wheres.map((w) => renderWhereClause(w, params));
       parts.push(`WHERE ${conditions.join(' AND ')}`);
     }
 
@@ -227,10 +277,7 @@ export class SelectBuilder<
     }
 
     if (this._havings.length > 0) {
-      const conditions = this._havings.map((h) => {
-        const val = renderValue(h.value, params);
-        return `${h.column} ${h.op} ${val}`;
-      });
+      const conditions = this._havings.map((h) => renderWhereClause(h, params));
       parts.push(`HAVING ${conditions.join(' AND ')}`);
     }
 
@@ -269,4 +316,28 @@ function renderValue(value: number | Param | Expression, params: Record<string, 
   }
   // Only numbers reach here (from limit/offset)
   return String(value);
+}
+
+function renderWhereClause(w: WhereClause, params: Record<string, unknown>): string {
+  switch (w.kind) {
+    case 'comparison': {
+      const val = renderValue(w.value, params);
+      return `${w.column} ${w.op} ${val}`;
+    }
+    case 'unary':
+      return `${w.column} ${w.op}`;
+    case 'between': {
+      const low = renderValue(w.low, params);
+      const high = renderValue(w.high, params);
+      return `${w.column} ${w.op} ${low} AND ${high}`;
+    }
+    case 'expression': {
+      if (w.expr instanceof ConditionGroup) {
+        for (const p of w.expr.params) {
+          params[p.name] = undefined;
+        }
+      }
+      return w.expr.sql;
+    }
+  }
 }

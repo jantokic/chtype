@@ -1,3 +1,5 @@
+import { Param } from './param.js';
+
 /** Represents a raw SQL expression with an optional alias. */
 export class Expression {
   constructor(
@@ -12,6 +14,45 @@ export class Expression {
   toString(): string {
     return this.alias ? `${this.sql} AS ${this.alias}` : this.sql;
   }
+}
+
+/** A condition tuple: [column, operator, value]. */
+type ConditionTuple = [column: string, op: string, value: Param | Expression];
+
+/** An expression that carries param references for registration during compile. */
+export class ConditionGroup extends Expression {
+  readonly params: Param[];
+
+  constructor(conditions: (ConditionTuple | Expression)[], operator: 'AND' | 'OR') {
+    const params: Param[] = [];
+    const parts = conditions.map((c) => {
+      if (c instanceof ConditionGroup) {
+        params.push(...c.params);
+        return c.sql;
+      }
+      if (c instanceof Expression) {
+        return c.sql;
+      }
+      const [col, op, val] = c;
+      if (val instanceof Param) {
+        params.push(val);
+        return `${col} ${op} ${val.toString()}`;
+      }
+      return `${col} ${op} ${val.sql}`;
+    });
+    super(`(${parts.join(` ${operator} `)})`);
+    this.params = params;
+  }
+}
+
+/** Group conditions with OR. */
+export function or(...conditions: (ConditionTuple | Expression)[]): ConditionGroup {
+  return new ConditionGroup(conditions, 'OR');
+}
+
+/** Group conditions with AND. */
+export function and(...conditions: (ConditionTuple | Expression)[]): ConditionGroup {
+  return new ConditionGroup(conditions, 'AND');
 }
 
 /** ClickHouse function builders. */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { createQueryBuilder } from '../query-builder.js';
+import { or, and } from '../expressions.js';
 import type { DatabaseSchema } from '../types.js';
 
 interface TestDB extends DatabaseSchema {
@@ -227,6 +228,159 @@ describe('SelectBuilder', () => {
       const whereIdx = lines.findIndex((l) => l.startsWith('WHERE'));
       expect(joinIdx).toBeGreaterThan(fromIdx);
       expect(whereIdx).toBeGreaterThan(joinIdx);
+    });
+  });
+
+  describe('DISTINCT', () => {
+    it('builds SELECT DISTINCT', () => {
+      const { sql } = qb.selectFrom('users').select(['user_id', 'name']).distinct().compile();
+      expect(sql).toBe('SELECT DISTINCT user_id, name\nFROM users');
+    });
+
+    it('builds SELECT DISTINCT *', () => {
+      const { sql } = qb.selectFrom('users').distinct().compile();
+      expect(sql).toBe('SELECT DISTINCT *\nFROM users');
+    });
+  });
+
+  describe('IS NULL / IS NOT NULL', () => {
+    it('builds WHERE IS NULL', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('score', 'IS NULL')
+        .compile();
+      expect(sql).toContain('WHERE score IS NULL');
+    });
+
+    it('builds WHERE IS NOT NULL', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('score', 'IS NOT NULL')
+        .compile();
+      expect(sql).toContain('WHERE score IS NOT NULL');
+    });
+
+    it('combines IS NULL with other conditions', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('name', '=', qb.param('name', 'String'))
+        .where('score', 'IS NOT NULL')
+        .compile();
+      expect(sql).toContain('WHERE name = {name:String} AND score IS NOT NULL');
+    });
+  });
+
+  describe('BETWEEN', () => {
+    it('builds WHERE BETWEEN', () => {
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('score', 'BETWEEN', [qb.param('low', 'Float64'), qb.param('high', 'Float64')])
+        .compile();
+      expect(sql).toContain('WHERE score BETWEEN {low:Float64} AND {high:Float64}');
+      expect(params).toHaveProperty('low');
+      expect(params).toHaveProperty('high');
+    });
+
+    it('builds WHERE NOT BETWEEN', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('score', 'NOT BETWEEN', [qb.param('low', 'Float64'), qb.param('high', 'Float64')])
+        .compile();
+      expect(sql).toContain('WHERE score NOT BETWEEN {low:Float64} AND {high:Float64}');
+    });
+  });
+
+  describe('NOT LIKE / ILIKE', () => {
+    it('builds WHERE NOT LIKE', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('name', 'NOT LIKE', qb.param('pattern', 'String'))
+        .compile();
+      expect(sql).toContain('WHERE name NOT LIKE {pattern:String}');
+    });
+
+    it('builds WHERE ILIKE', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('name', 'ILIKE', qb.param('pattern', 'String'))
+        .compile();
+      expect(sql).toContain('WHERE name ILIKE {pattern:String}');
+    });
+
+    it('builds WHERE NOT ILIKE', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('name', 'NOT ILIKE', qb.param('pattern', 'String'))
+        .compile();
+      expect(sql).toContain('WHERE name NOT ILIKE {pattern:String}');
+    });
+  });
+
+  describe('OR / AND grouping', () => {
+    it('builds WHERE with OR group', () => {
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where(or(
+          ['score', '>', qb.param('min', 'Float64')],
+          ['name', '=', qb.param('name', 'String')],
+        ))
+        .compile();
+      expect(sql).toContain('WHERE (score > {min:Float64} OR name = {name:String})');
+      expect(params).toHaveProperty('min');
+      expect(params).toHaveProperty('name');
+    });
+
+    it('builds WHERE with AND group', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where(and(
+          ['score', '>', qb.param('min', 'Float64')],
+          ['name', '=', qb.param('name', 'String')],
+        ))
+        .compile();
+      expect(sql).toContain('WHERE (score > {min:Float64} AND name = {name:String})');
+    });
+
+    it('combines OR group with regular conditions', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('user_id', '!=', qb.param('excludeId', 'String'))
+        .where(or(
+          ['score', '>', qb.param('min', 'Float64')],
+          ['name', 'LIKE', qb.param('pattern', 'String')],
+        ))
+        .compile();
+      expect(sql).toContain(
+        'WHERE user_id != {excludeId:String} AND (score > {min:Float64} OR name LIKE {pattern:String})',
+      );
+    });
+
+    it('nests OR inside AND', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where(and(
+          or(
+            ['score', '>', qb.param('min', 'Float64')],
+            ['score', '<', qb.param('neg', 'Float64')],
+          ),
+          ['name', '!=', qb.param('name', 'String')],
+        ))
+        .compile();
+      expect(sql).toContain(
+        'WHERE ((score > {min:Float64} OR score < {neg:Float64}) AND name != {name:String})',
+      );
     });
   });
 });

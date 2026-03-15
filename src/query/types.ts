@@ -24,13 +24,19 @@ export interface CompiledQuery {
 export type SortDirection = 'ASC' | 'DESC';
 
 /** Comparison operators for scalar values. */
-export type ComparisonOp = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'LIKE';
+export type ComparisonOp = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'LIKE' | 'NOT LIKE' | 'ILIKE' | 'NOT ILIKE';
 
 /** Set membership operators — require Array(...) param types. */
 export type SetOp = 'IN' | 'NOT IN';
 
+/** Unary operators (no value argument). */
+export type UnaryOp = 'IS NULL' | 'IS NOT NULL';
+
+/** Range operators — require a [low, high] tuple. */
+export type BetweenOp = 'BETWEEN' | 'NOT BETWEEN';
+
 /** All WHERE operators. */
-export type WhereOp = ComparisonOp | SetOp;
+export type WhereOp = ComparisonOp | SetOp | UnaryOp | BetweenOp;
 
 /** ClickHouse JOIN types. */
 export type JoinType =
