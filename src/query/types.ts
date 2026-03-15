@@ -23,5 +23,33 @@ export interface CompiledQuery {
 
 export type SortDirection = 'ASC' | 'DESC';
 
-/** Comparison operators. IN/NOT IN require Array param types. */
+/** Comparison operators for scalar values. */
 export type ComparisonOp = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'LIKE';
+
+/** Set membership operators — require Array(...) param types. */
+export type SetOp = 'IN' | 'NOT IN';
+
+/** All WHERE operators. */
+export type WhereOp = ComparisonOp | SetOp;
+
+/** ClickHouse JOIN types. */
+export type JoinType =
+  | 'JOIN'
+  | 'INNER JOIN'
+  | 'LEFT JOIN'
+  | 'RIGHT JOIN'
+  | 'FULL JOIN'
+  | 'CROSS JOIN'
+  | 'LEFT OUTER JOIN'
+  | 'RIGHT OUTER JOIN'
+  | 'FULL OUTER JOIN'
+  | 'ANY JOIN'
+  | 'ANY LEFT JOIN'
+  | 'ANY RIGHT JOIN'
+  | 'ANY INNER JOIN'
+  | 'ALL JOIN'
+  | 'ALL LEFT JOIN'
+  | 'ALL RIGHT JOIN'
+  | 'ALL INNER JOIN'
+  | 'ASOF JOIN'
+  | 'ASOF LEFT JOIN';

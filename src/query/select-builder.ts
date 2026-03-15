@@ -11,8 +11,11 @@ import type {
   CompiledQuery,
   ComparisonOp,
   DatabaseSchema,
+  JoinType,
+  SetOp,
   SortDirection,
   TableName,
+  WhereOp,
 } from './types.js';
 import { Expression } from './expressions.js';
 import { Param } from './param.js';
@@ -22,8 +25,16 @@ const VALID_SETTING_KEY = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 interface WhereClause {
   column: string;
-  op: ComparisonOp;
+  op: WhereOp;
   value: Param | Expression;
+}
+
+interface JoinClause {
+  type: JoinType;
+  table: string;
+  alias?: string;
+  onLeft: string;
+  onRight: string;
 }
 
 interface OrderByClause {
@@ -37,8 +48,10 @@ export class SelectBuilder<
   TSelected extends string = string,
 > {
   private _table: T;
+  private _tableAlias?: string;
   private _columns: (string | Expression)[] = [];
   private _wheres: WhereClause[] = [];
+  private _joins: JoinClause[] = [];
   private _groupBy: string[] = [];
   private _havings: WhereClause[] = [];
   private _orderBys: OrderByClause[] = [];
@@ -51,6 +64,12 @@ export class SelectBuilder<
     this._table = table;
   }
 
+  /** Alias the main table (useful with JOINs). */
+  as(alias: string): this {
+    this._tableAlias = alias;
+    return this;
+  }
+
   select<C extends ColumnName<DB, T>>(
     columns: (C | Expression)[],
   ): SelectBuilder<DB, T, C> {
@@ -60,8 +79,19 @@ export class SelectBuilder<
 
   /** Add a WHERE condition. Values must be Param or Expression — no raw strings. */
   where(
-    column: ColumnName<DB, T> | Expression,
+    column: ColumnName<DB, T> | Expression | string,
     op: ComparisonOp,
+    value: Param | Expression,
+  ): this;
+  /** Add a WHERE IN / NOT IN condition. Value must be an Array(...) Param. */
+  where(
+    column: ColumnName<DB, T> | Expression | string,
+    op: SetOp,
+    value: Param | Expression,
+  ): this;
+  where(
+    column: ColumnName<DB, T> | Expression | string,
+    op: WhereOp,
     value: Param | Expression,
   ): this {
     const col = column instanceof Expression ? column.sql : column;
@@ -69,7 +99,54 @@ export class SelectBuilder<
     return this;
   }
 
-  groupBy(...columns: (ColumnName<DB, T> | Expression)[]): this {
+  /**
+   * Add a JOIN clause.
+   *
+   * @example
+   * ```ts
+   * qb.selectFrom('orders')
+   *   .join('INNER JOIN', 'users', 'u', 'orders.user_id', 'u.user_id')
+   *   .select([...])
+   * ```
+   */
+  join(
+    type: JoinType,
+    table: string,
+    alias: string | undefined,
+    onLeft: string,
+    onRight: string,
+  ): this {
+    this._joins.push({ type, table, alias, onLeft, onRight });
+    return this;
+  }
+
+  /** Shorthand for INNER JOIN. */
+  innerJoin(table: string, alias: string | undefined, onLeft: string, onRight: string): this {
+    return this.join('INNER JOIN', table, alias, onLeft, onRight);
+  }
+
+  /** Shorthand for LEFT JOIN. */
+  leftJoin(table: string, alias: string | undefined, onLeft: string, onRight: string): this {
+    return this.join('LEFT JOIN', table, alias, onLeft, onRight);
+  }
+
+  /** Shorthand for RIGHT JOIN. */
+  rightJoin(table: string, alias: string | undefined, onLeft: string, onRight: string): this {
+    return this.join('RIGHT JOIN', table, alias, onLeft, onRight);
+  }
+
+  /** Shorthand for CROSS JOIN (no ON clause — onLeft/onRight are ignored). */
+  crossJoin(table: string, alias?: string): this {
+    this._joins.push({ type: 'CROSS JOIN', table, alias, onLeft: '', onRight: '' });
+    return this;
+  }
+
+  /** Shorthand for ANY LEFT JOIN (ClickHouse-specific). */
+  anyLeftJoin(table: string, alias: string | undefined, onLeft: string, onRight: string): this {
+    return this.join('ANY LEFT JOIN', table, alias, onLeft, onRight);
+  }
+
+  groupBy(...columns: (ColumnName<DB, T> | Expression | string)[]): this {
     this._groupBy.push(...columns.map((c) => (c instanceof Expression ? c.sql : c)));
     return this;
   }
@@ -123,8 +200,19 @@ export class SelectBuilder<
         : '*';
     parts.push(`SELECT ${selectList}`);
 
+    const tableName = this._table as string;
+    const tableRef = this._tableAlias ? `${tableName} AS ${this._tableAlias}` : tableName;
     const finalMod = this._final ? ' FINAL' : '';
-    parts.push(`FROM ${this._table as string}${finalMod}`);
+    parts.push(`FROM ${tableRef}${finalMod}`);
+
+    for (const j of this._joins) {
+      const joinTable = j.alias ? `${j.table} AS ${j.alias}` : j.table;
+      if (j.type === 'CROSS JOIN') {
+        parts.push(`CROSS JOIN ${joinTable}`);
+      } else {
+        parts.push(`${j.type} ${joinTable} ON ${j.onLeft} = ${j.onRight}`);
+      }
+    }
 
     if (this._wheres.length > 0) {
       const conditions = this._wheres.map((w) => {

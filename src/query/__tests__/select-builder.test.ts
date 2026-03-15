@@ -110,4 +110,123 @@ describe('SelectBuilder', () => {
     expect(sql).toContain('LIMIT {limit:UInt32}');
     expect(params).toHaveProperty('limit');
   });
+
+  describe('IN / NOT IN', () => {
+    it('builds WHERE IN with Array param', () => {
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .where('user_id', 'IN', qb.param('ids', 'Array(String)'))
+        .compile();
+      expect(sql).toContain('WHERE user_id IN {ids:Array(String)}');
+      expect(params).toHaveProperty('ids');
+    });
+
+    it('builds WHERE NOT IN', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('user_id', 'NOT IN', qb.param('excludeIds', 'Array(String)'))
+        .compile();
+      expect(sql).toContain('WHERE user_id NOT IN {excludeIds:Array(String)}');
+    });
+
+    it('combines IN with other conditions', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .where('user_id', 'IN', qb.param('ids', 'Array(String)'))
+        .where('score', '>', qb.param('minScore', 'Float64'))
+        .compile();
+      expect(sql).toContain('WHERE user_id IN {ids:Array(String)} AND score > {minScore:Float64}');
+    });
+  });
+
+  describe('JOIN', () => {
+    it('builds INNER JOIN', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .innerJoin('events', 'e', 'users.user_id', 'e.user_id')
+        .select(['user_id', 'name'])
+        .compile();
+      expect(sql).toContain('INNER JOIN events AS e ON users.user_id = e.user_id');
+    });
+
+    it('builds LEFT JOIN without alias', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .leftJoin('events', undefined, 'users.user_id', 'events.user_id')
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('LEFT JOIN events ON users.user_id = events.user_id');
+    });
+
+    it('builds RIGHT JOIN', () => {
+      const { sql } = qb
+        .selectFrom('events')
+        .rightJoin('users', 'u', 'events.user_id', 'u.user_id')
+        .compile();
+      expect(sql).toContain('RIGHT JOIN users AS u ON events.user_id = u.user_id');
+    });
+
+    it('builds CROSS JOIN', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .crossJoin('events', 'e')
+        .compile();
+      expect(sql).toContain('CROSS JOIN events AS e');
+      expect(sql).not.toContain('ON');
+    });
+
+    it('builds ANY LEFT JOIN (ClickHouse-specific)', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .anyLeftJoin('events', 'e', 'users.user_id', 'e.user_id')
+        .compile();
+      expect(sql).toContain('ANY LEFT JOIN events AS e ON users.user_id = e.user_id');
+    });
+
+    it('builds generic join with custom type', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .join('ASOF JOIN', 'events', 'e', 'users.user_id', 'e.user_id')
+        .compile();
+      expect(sql).toContain('ASOF JOIN events AS e ON users.user_id = e.user_id');
+    });
+
+    it('builds table alias', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .as('u')
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('FROM users AS u');
+    });
+
+    it('builds multiple joins', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .as('u')
+        .innerJoin('events', 'e', 'u.user_id', 'e.user_id')
+        .leftJoin('events', 'e2', 'u.user_id', 'e2.user_id')
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('INNER JOIN events AS e ON u.user_id = e.user_id');
+      expect(sql).toContain('LEFT JOIN events AS e2 ON u.user_id = e2.user_id');
+    });
+
+    it('places JOINs after FROM and before WHERE', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .innerJoin('events', 'e', 'users.user_id', 'e.user_id')
+        .where('score', '>', qb.param('min', 'Float64'))
+        .compile();
+      const lines = sql.split('\n');
+      const fromIdx = lines.findIndex((l) => l.startsWith('FROM'));
+      const joinIdx = lines.findIndex((l) => l.includes('JOIN'));
+      const whereIdx = lines.findIndex((l) => l.startsWith('WHERE'));
+      expect(joinIdx).toBeGreaterThan(fromIdx);
+      expect(whereIdx).toBeGreaterThan(joinIdx);
+    });
+  });
 });

@@ -12,4 +12,7 @@ export type {
   CompiledQuery,
   SortDirection,
   ComparisonOp,
+  SetOp,
+  WhereOp,
+  JoinType,
 } from './types.js';
