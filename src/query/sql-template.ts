@@ -1,5 +1,5 @@
 import type { CompiledQuery } from './types.js';
-import { Expression, Subquery } from './expressions.js';
+import { ConditionGroup, Expression, Subquery } from './expressions.js';
 import { Param } from './param.js';
 
 /**
@@ -30,7 +30,8 @@ function isCompiledQuery(value: unknown): value is CompiledQuery {
     typeof (value as CompiledQuery).sql === 'string' &&
     typeof (value as CompiledQuery).params === 'object' &&
     !(value instanceof Expression) &&
-    !(value instanceof Param)
+    !(value instanceof Param) &&
+    !(value instanceof Subquery)
   );
 }
 
@@ -47,9 +48,9 @@ function isCompiledQuery(value: unknown): value is CompiledQuery {
  * // query.sql === 'SELECT user_id FROM users WHERE score > {min:Float64}'
  * ```
  */
-export function sql<T extends RejectRaw<T>[]>(
+export function sql<T extends SqlInterpolation[]>(
   strings: TemplateStringsArray,
-  ...values: [...T]
+  ...values: { [K in keyof T]: RejectRaw<T[K]> }
 ): CompiledQuery {
   const params: Record<string, unknown> = {};
   const registeredParams = new Set<string>();
@@ -84,6 +85,9 @@ export function sql<T extends RejectRaw<T>[]>(
     } else if (value instanceof Subquery) {
       mergeParams(value.subqueryParams, 'subquery');
       sqlParts.push(value.sql, nextString);
+    } else if (value instanceof ConditionGroup) {
+      for (const p of value.params) registerParam(p);
+      sqlParts.push(value.toString(), nextString);
     } else if (value instanceof Expression) {
       sqlParts.push(value.toString(), nextString);
     } else if (isCompiledQuery(value)) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { createQueryBuilder } from '../query-builder.js';
-import { Expression, fn, Subquery } from '../expressions.js';
+import { Expression, fn, or, and, Subquery } from '../expressions.js';
 import { Param } from '../param.js';
 import { sql } from '../sql-template.js';
 import type { DatabaseSchema } from '../types.js';
@@ -62,6 +62,41 @@ describe('sql tagged template', () => {
     it('renders fn.raw()', () => {
       const query = sql`SELECT ${fn.raw('now()')} AS ts`;
       expect(query.sql).toBe('SELECT now() AS ts');
+    });
+  });
+
+  describe('ConditionGroup interpolation', () => {
+    it('renders or() group and registers its params', () => {
+      const cond = or(
+        ['score', '>', qb.param('min', 'Float64')],
+        ['name', '=', qb.param('name', 'String')],
+      );
+      const query = sql`SELECT * FROM users WHERE ${cond}`;
+      expect(query.sql).toBe('SELECT * FROM users WHERE (score > {min:Float64} OR name = {name:String})');
+      expect(query.params).toHaveProperty('min');
+      expect(query.params).toHaveProperty('name');
+    });
+
+    it('renders and() group and registers its params', () => {
+      const cond = and(
+        ['score', '>', qb.param('min', 'Float64')],
+        ['name', '!=', qb.param('name', 'String')],
+      );
+      const query = sql`SELECT * FROM users WHERE ${cond}`;
+      expect(query.sql).toBe('SELECT * FROM users WHERE (score > {min:Float64} AND name != {name:String})');
+      expect(query.params).toHaveProperty('min');
+      expect(query.params).toHaveProperty('name');
+    });
+
+    it('detects param collisions in ConditionGroup', () => {
+      const cond = or(
+        ['score', '>', qb.param('val', 'Float64')],
+        ['name', '=', qb.param('other', 'String')],
+      );
+      const p = qb.param('val', 'String');
+      expect(() => {
+        sql`SELECT * FROM users WHERE ${cond} AND x = ${p}`;
+      }).toThrow('Param name collision');
     });
   });
 
