@@ -27,10 +27,10 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "bun x tsc",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "check": "bun test && tsc --noEmit"
+    "typecheck": "bun x tsc --noEmit",
+    "check": "bun test && bun x tsc --noEmit"
   },
   "dependencies": {
     "@clickhouse/client": "^1.8.0",
