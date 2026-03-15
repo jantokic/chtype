@@ -12,11 +12,11 @@ import {
 import type { CompiledQuery, DatabaseSchema, InsertType, TableName } from '../query/types.js';
 
 export interface ChtypeClient<DB extends DatabaseSchema> {
-  /** Execute a compiled query and return typed rows. */
-  execute<T = Record<string, unknown>>(query: CompiledQuery): Promise<T[]>;
+  /** Execute a compiled query and return typed rows. Result type is inferred from the compiled query. */
+  execute<T = Record<string, unknown>>(query: CompiledQuery<T>): Promise<T[]>;
 
   /** Execute a compiled query and return a typed async iterable for streaming large result sets. */
-  stream<T = Record<string, unknown>>(query: CompiledQuery): AsyncIterable<T[]>;
+  stream<T = Record<string, unknown>>(query: CompiledQuery<T>): AsyncIterable<T[]>;
 
   /** Execute a raw SQL query with optional parameters. */
   query<T = Record<string, unknown>>(sql: string, params?: Record<string, unknown>): Promise<T[]>;
@@ -57,7 +57,7 @@ export function createClient<DB extends DatabaseSchema>(
   const client = createBaseClient(options);
 
   return {
-    async execute<T = Record<string, unknown>>(query: CompiledQuery): Promise<T[]> {
+    async execute<T = Record<string, unknown>>(query: CompiledQuery<T>): Promise<T[]> {
       const result = await client.query({
         query: query.sql,
         query_params: query.params,
@@ -66,7 +66,7 @@ export function createClient<DB extends DatabaseSchema>(
       return result.json<T>();
     },
 
-    async *stream<T = Record<string, unknown>>(query: CompiledQuery): AsyncIterable<T[]> {
+    async *stream<T = Record<string, unknown>>(query: CompiledQuery<T>): AsyncIterable<T[]> {
       const result = await client.query({
         query: query.sql,
         query_params: query.params,

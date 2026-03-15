@@ -13,6 +13,8 @@ import type {
   ComparisonOp,
   DatabaseSchema,
   JoinType,
+  RowType,
+  SelectResult,
   SetOp,
   SortDirection,
   TableName,
@@ -88,7 +90,7 @@ export class SelectBuilder<
   }
 
   /** Add a WITH (CTE) clause. The subquery is compiled and prepended to the query. */
-  with(name: string, subquery: Subquery | { compile(): CompiledQuery }): this {
+  with(name: string, subquery: Subquery | { compile(): CompiledQuery<unknown> }): this {
     if (!VALID_IDENTIFIER.test(name)) {
       throw new Error(`Invalid CTE name: "${name}"`);
     }
@@ -127,11 +129,11 @@ export class SelectBuilder<
     return this;
   }
 
-  select<C extends ColumnName<DB, T>>(
-    columns: (C | Expression)[],
-  ): SelectBuilder<DB, T, C> {
+  select<C extends ColumnName<DB, T>, E extends Expression & { alias: string }>(
+    columns: (C | E | Expression)[],
+  ): SelectBuilder<DB, T, C | (E extends { alias: infer A extends string } ? A : never)> {
     this._columns = columns;
-    return this as unknown as SelectBuilder<DB, T, C>;
+    return this as unknown as SelectBuilder<DB, T, C | (E extends { alias: infer A extends string } ? A : never)>;
   }
 
   /** Add a WHERE condition. Values must be Param or Expression — no raw strings. */
@@ -285,7 +287,7 @@ export class SelectBuilder<
     return this;
   }
 
-  compile(): CompiledQuery {
+  compile(): CompiledQuery<string extends TSelected ? RowType<DB, T> : SelectResult<DB, T, TSelected>> {
     const ctx = createCompileContext();
     const parts: string[] = [];
 
@@ -372,10 +374,10 @@ export class SelectBuilder<
 type SetOperator = 'UNION ALL' | 'UNION DISTINCT' | 'INTERSECT' | 'EXCEPT';
 
 /** Combine multiple SELECT queries with a set operator (UNION ALL, UNION DISTINCT, INTERSECT, EXCEPT). */
-export function setOperation(
+export function setOperation<T = Record<string, unknown>>(
   operator: SetOperator,
-  ...queries: { compile(): CompiledQuery }[]
-): CompiledQuery {
+  ...queries: { compile(): CompiledQuery<T> }[]
+): CompiledQuery<T> {
   if (queries.length < 2) {
     throw new Error(`${operator} requires at least two queries`);
   }
@@ -399,22 +401,22 @@ export function setOperation(
 }
 
 /** Shorthand for UNION ALL. */
-export function unionAll(...queries: { compile(): CompiledQuery }[]): CompiledQuery {
+export function unionAll<T = Record<string, unknown>>(...queries: { compile(): CompiledQuery<T> }[]): CompiledQuery<T> {
   return setOperation('UNION ALL', ...queries);
 }
 
 /** Shorthand for UNION DISTINCT. */
-export function unionDistinct(...queries: { compile(): CompiledQuery }[]): CompiledQuery {
+export function unionDistinct<T = Record<string, unknown>>(...queries: { compile(): CompiledQuery<T> }[]): CompiledQuery<T> {
   return setOperation('UNION DISTINCT', ...queries);
 }
 
 /** Shorthand for INTERSECT. */
-export function intersect(...queries: { compile(): CompiledQuery }[]): CompiledQuery {
+export function intersect<T = Record<string, unknown>>(...queries: { compile(): CompiledQuery<T> }[]): CompiledQuery<T> {
   return setOperation('INTERSECT', ...queries);
 }
 
 /** Shorthand for EXCEPT. */
-export function except(...queries: { compile(): CompiledQuery }[]): CompiledQuery {
+export function except<T = Record<string, unknown>>(...queries: { compile(): CompiledQuery<T> }[]): CompiledQuery<T> {
   return setOperation('EXCEPT', ...queries);
 }
 

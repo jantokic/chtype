@@ -13,13 +13,22 @@ export type RowType<DB extends DatabaseSchema, T extends TableName<DB>> = DB[T][
 export type InsertType<DB extends DatabaseSchema, T extends TableName<DB>> = DB[T]['insert'];
 export type ColumnName<DB extends DatabaseSchema, T extends TableName<DB>> = keyof RowType<DB, T> & string;
 
-/** A compiled query ready for execution. */
-export interface CompiledQuery {
+/** A compiled query ready for execution. TResult carries the inferred row type from selected columns. */
+export interface CompiledQuery<TResult = Record<string, unknown>> {
   /** The parameterized SQL string with {name:Type} placeholders. */
   sql: string;
   /** Registry of parameter names that appear in the query. Values are undefined (filled at execution time). */
   params: Record<string, unknown>;
+  /** Phantom field — never set at runtime, only used by TypeScript to carry the result type. */
+  readonly _resultType?: TResult;
 }
+
+/** Compute the result row type from selected columns and expressions. */
+export type SelectResult<DB extends DatabaseSchema, T extends TableName<DB>, TSelected extends string> =
+  string extends TSelected
+    ? Record<string, unknown>
+    : Pick<RowType<DB, T>, TSelected & keyof RowType<DB, T>>
+      & Record<Exclude<TSelected, keyof RowType<DB, T>>, unknown>;
 
 export type SortDirection = 'ASC' | 'DESC';
 
