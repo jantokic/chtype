@@ -44,10 +44,10 @@ describe('DeleteBuilder', () => {
       .deleteFrom('users')
       .where(or(
         ['score', '<', qb.param('min', 'Float64')],
-        ['name', 'IS NULL', qb.fn.raw('1')],
+        ['name', '=', qb.param('name', 'String')],
       ))
       .compile();
-    expect(sql).toContain('DELETE WHERE (score < {min:Float64} OR name IS NULL 1)');
+    expect(sql).toContain('DELETE WHERE (score < {min:Float64} OR name = {name:String})');
   });
 
   it('builds DELETE with IN (subquery)', () => {
@@ -78,5 +78,13 @@ describe('DeleteBuilder', () => {
     expect(() => {
       qb.deleteFrom('users').onCluster('bad; DROP TABLE users');
     }).toThrow('Invalid cluster name');
+  });
+
+  it('builds DELETE with BETWEEN', () => {
+    const { sql } = qb
+      .deleteFrom('users')
+      .where('score', 'BETWEEN', [qb.param('low', 'Float64'), qb.param('high', 'Float64')])
+      .compile();
+    expect(sql).toBe('ALTER TABLE users DELETE WHERE score BETWEEN {low:Float64} AND {high:Float64}');
   });
 });

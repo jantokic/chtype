@@ -16,22 +16,14 @@ import type {
   UnaryOp,
   WhereOp,
 } from './types.js';
-import { ConditionGroup, Expression, Subquery } from './expressions.js';
+import { Expression } from './expressions.js';
 import { Param } from './param.js';
-
-/** Valid SQL identifier pattern. */
-const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-
-type WhereClause =
-  | { kind: 'comparison'; column: string; op: ComparisonOp | SetOp; value: Param | Expression }
-  | { kind: 'unary'; column: string; op: UnaryOp }
-  | { kind: 'between'; column: string; op: BetweenOp; low: Param | Expression; high: Param | Expression }
-  | { kind: 'expression'; expr: Expression };
-
-interface CompileContext {
-  params: Record<string, unknown>;
-  externalParams: Set<string>;
-}
+import {
+  type WhereClause,
+  createCompileContext,
+  renderWhereClause,
+  VALID_IDENTIFIER,
+} from './compile-utils.js';
 
 export class DeleteBuilder<
   DB extends DatabaseSchema,
@@ -79,23 +71,7 @@ export class DeleteBuilder<
     op?: WhereOp,
     value?: Param | Expression | [Param | Expression, Param | Expression],
   ): this {
-    if (columnOrCondition instanceof Expression && op === undefined) {
-      this._wheres.push({ kind: 'expression', expr: columnOrCondition });
-      return this;
-    }
-    const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
-    if (op === 'IS NULL' || op === 'IS NOT NULL') {
-      this._wheres.push({ kind: 'unary', column: col, op });
-      return this;
-    }
-    if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
-      if (!Array.isArray(value) || value.length < 2) {
-        throw new Error(`${op} requires a [low, high] tuple`);
-      }
-      this._wheres.push({ kind: 'between', column: col, op, low: value[0]!, high: value[1]! });
-      return this;
-    }
-    this._wheres.push({ kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression });
+    this._wheres.push(buildWhereClause(columnOrCondition, op, value));
     return this;
   }
 
@@ -104,7 +80,7 @@ export class DeleteBuilder<
       throw new Error('DELETE requires at least one WHERE condition');
     }
 
-    const ctx: CompileContext = { params: {}, externalParams: new Set() };
+    const ctx = createCompileContext();
     const table = this._table as string;
     const clusterClause = this._cluster ? ` ON CLUSTER ${this._cluster}` : '';
     const conditions = this._wheres.map((w) => renderWhereClause(w, ctx));
@@ -114,49 +90,23 @@ export class DeleteBuilder<
   }
 }
 
-function mergeParams(ctx: CompileContext, source: Record<string, unknown>): void {
-  for (const key of Object.keys(source)) {
-    if (key in ctx.params) {
-      throw new Error(`Param name collision: "${key}" is used in both the subquery and outer query`);
+function buildWhereClause(
+  columnOrCondition: Expression | string,
+  op?: WhereOp,
+  value?: Param | Expression | [Param | Expression, Param | Expression],
+): WhereClause {
+  if (columnOrCondition instanceof Expression && op === undefined) {
+    return { kind: 'expression', expr: columnOrCondition };
+  }
+  const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
+  if (op === 'IS NULL' || op === 'IS NOT NULL') {
+    return { kind: 'unary', column: col, op };
+  }
+  if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
+    if (!Array.isArray(value) || value.length < 2) {
+      throw new Error(`${op} requires a [low, high] tuple`);
     }
-    ctx.params[key] = source[key];
-    ctx.externalParams.add(key);
+    return { kind: 'between', column: col, op, low: value[0]!, high: value[1]! };
   }
-}
-
-function renderValue(value: Param | Expression, ctx: CompileContext): string {
-  if (value instanceof Subquery) {
-    mergeParams(ctx, value.subqueryParams);
-    return value.sql;
-  }
-  if (value instanceof Param) {
-    if (ctx.externalParams.has(value.name)) {
-      throw new Error(`Param name collision: "${value.name}" is used in both the subquery and outer query`);
-    }
-    ctx.params[value.name] = undefined;
-    return value.toString();
-  }
-  return value.sql;
-}
-
-function renderWhereClause(w: WhereClause, ctx: CompileContext): string {
-  switch (w.kind) {
-    case 'comparison':
-      return `${w.column} ${w.op} ${renderValue(w.value, ctx)}`;
-    case 'unary':
-      return `${w.column} ${w.op}`;
-    case 'between':
-      return `${w.column} ${w.op} ${renderValue(w.low, ctx)} AND ${renderValue(w.high, ctx)}`;
-    case 'expression': {
-      if (w.expr instanceof ConditionGroup) {
-        for (const p of w.expr.params) {
-          if (ctx.externalParams.has(p.name)) {
-            throw new Error(`Param name collision: "${p.name}" is used in both the subquery and outer query`);
-          }
-          ctx.params[p.name] = undefined;
-        }
-      }
-      return w.expr.sql;
-    }
-  }
+  return { kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression };
 }

@@ -19,17 +19,16 @@ import type {
   UnaryOp,
   WhereOp,
 } from './types.js';
-import { ConditionGroup, Expression, Subquery } from './expressions.js';
+import { Expression, Subquery } from './expressions.js';
 import { Param } from './param.js';
-
-/** Valid SQL identifier pattern (settings keys, CTE names, etc.). */
-const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-
-type WhereClause =
-  | { kind: 'comparison'; column: string; op: ComparisonOp | SetOp; value: Param | Expression }
-  | { kind: 'unary'; column: string; op: UnaryOp }
-  | { kind: 'between'; column: string; op: BetweenOp; low: Param | Expression; high: Param | Expression }
-  | { kind: 'expression'; expr: Expression };
+import {
+  type WhereClause,
+  createCompileContext,
+  mergeParams,
+  renderValue,
+  renderWhereClause,
+  VALID_IDENTIFIER,
+} from './compile-utils.js';
 
 interface JoinClause {
   type: JoinType;
@@ -122,24 +121,7 @@ export class SelectBuilder<
     op?: WhereOp,
     value?: Param | Expression | [Param | Expression, Param | Expression],
   ): this {
-    // Reuse the same logic as where(), but push to _prewheres
-    if (columnOrCondition instanceof Expression && op === undefined) {
-      this._prewheres.push({ kind: 'expression', expr: columnOrCondition });
-      return this;
-    }
-    const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
-    if (op === 'IS NULL' || op === 'IS NOT NULL') {
-      this._prewheres.push({ kind: 'unary', column: col, op });
-      return this;
-    }
-    if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
-      if (!Array.isArray(value) || value.length < 2) {
-        throw new Error(`${op} requires a [low, high] tuple`);
-      }
-      this._prewheres.push({ kind: 'between', column: col, op, low: value[0]!, high: value[1]! });
-      return this;
-    }
-    this._prewheres.push({ kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression });
+    this._prewheres.push(buildWhereClause(columnOrCondition, op, value));
     return this;
   }
 
@@ -180,31 +162,7 @@ export class SelectBuilder<
     op?: WhereOp,
     value?: Param | Expression | [Param | Expression, Param | Expression],
   ): this {
-    // Expression-only overload: where(or(...)) or where(and(...))
-    if (columnOrCondition instanceof Expression && op === undefined) {
-      this._wheres.push({ kind: 'expression', expr: columnOrCondition });
-      return this;
-    }
-
-    const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
-
-    // Unary: IS NULL / IS NOT NULL
-    if (op === 'IS NULL' || op === 'IS NOT NULL') {
-      this._wheres.push({ kind: 'unary', column: col, op });
-      return this;
-    }
-
-    // Between: BETWEEN / NOT BETWEEN
-    if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
-      if (!Array.isArray(value) || value.length < 2) {
-        throw new Error(`${op} requires a [low, high] tuple`);
-      }
-      this._wheres.push({ kind: 'between', column: col, op, low: value[0]!, high: value[1]! });
-      return this;
-    }
-
-    // Standard comparison or set op
-    this._wheres.push({ kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression });
+    this._wheres.push(buildWhereClause(columnOrCondition, op, value));
     return this;
   }
 
@@ -313,7 +271,7 @@ export class SelectBuilder<
   }
 
   compile(): CompiledQuery {
-    const ctx: CompileContext = { params: {}, externalParams: new Set() };
+    const ctx = createCompileContext();
     const parts: string[] = [];
 
     // WITH (CTE) clauses
@@ -440,65 +398,24 @@ export function except(...queries: { compile(): CompiledQuery }[]): CompiledQuer
   return setOperation('EXCEPT', ...queries);
 }
 
-/** Tracks params and their origin during compilation. */
-interface CompileContext {
-  params: Record<string, unknown>;
-  /** Param names that came from subqueries/CTEs (external sources). */
-  externalParams: Set<string>;
-}
-
-function mergeParams(ctx: CompileContext, source: Record<string, unknown>): void {
-  for (const key of Object.keys(source)) {
-    if (key in ctx.params) {
-      throw new Error(`Param name collision: "${key}" is used in both the subquery/CTE and outer query`);
-    }
-    ctx.params[key] = source[key];
-    ctx.externalParams.add(key);
+/** Parse where() arguments into a WhereClause. Shared by where() and prewhere(). */
+function buildWhereClause(
+  columnOrCondition: Expression | string,
+  op?: WhereOp,
+  value?: Param | Expression | [Param | Expression, Param | Expression],
+): WhereClause {
+  if (columnOrCondition instanceof Expression && op === undefined) {
+    return { kind: 'expression', expr: columnOrCondition };
   }
-}
-
-function renderValue(value: number | Param | Expression, ctx: CompileContext): string {
-  if (value instanceof Subquery) {
-    mergeParams(ctx, value.subqueryParams);
-    return value.sql;
+  const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
+  if (op === 'IS NULL' || op === 'IS NOT NULL') {
+    return { kind: 'unary', column: col, op };
   }
-  if (value instanceof Param) {
-    if (ctx.externalParams.has(value.name)) {
-      throw new Error(`Param name collision: "${value.name}" is used in both the subquery/CTE and outer query`);
+  if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
+    if (!Array.isArray(value) || value.length < 2) {
+      throw new Error(`${op} requires a [low, high] tuple`);
     }
-    ctx.params[value.name] = undefined;
-    return value.toString();
+    return { kind: 'between', column: col, op, low: value[0]!, high: value[1]! };
   }
-  if (value instanceof Expression) {
-    return value.sql;
-  }
-  // Only numbers reach here (from limit/offset)
-  return String(value);
-}
-
-function renderWhereClause(w: WhereClause, ctx: CompileContext): string {
-  switch (w.kind) {
-    case 'comparison': {
-      const val = renderValue(w.value, ctx);
-      return `${w.column} ${w.op} ${val}`;
-    }
-    case 'unary':
-      return `${w.column} ${w.op}`;
-    case 'between': {
-      const low = renderValue(w.low, ctx);
-      const high = renderValue(w.high, ctx);
-      return `${w.column} ${w.op} ${low} AND ${high}`;
-    }
-    case 'expression': {
-      if (w.expr instanceof ConditionGroup) {
-        for (const p of w.expr.params) {
-          if (ctx.externalParams.has(p.name)) {
-            throw new Error(`Param name collision: "${p.name}" is used in both the subquery/CTE and outer query`);
-          }
-          ctx.params[p.name] = undefined;
-        }
-      }
-      return w.expr.sql;
-    }
-  }
+  return { kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression };
 }

@@ -88,4 +88,21 @@ describe('UpdateBuilder', () => {
       qb.update('users').onCluster('bad; DROP TABLE');
     }).toThrow('Invalid cluster name');
   });
+
+  it('rejects invalid column names in SET', () => {
+    expect(() => {
+      (qb.update('users') as any).set('name; DROP TABLE users --', qb.param('val', 'String'));
+    }).toThrow('Invalid column name');
+  });
+
+  it('builds UPDATE with BETWEEN in WHERE', () => {
+    const { sql } = qb
+      .update('users')
+      .set('name', qb.param('newName', 'String'))
+      .where('score', 'BETWEEN', [qb.param('low', 'Float64'), qb.param('high', 'Float64')])
+      .compile();
+    expect(sql).toBe(
+      'ALTER TABLE users UPDATE name = {newName:String} WHERE score BETWEEN {low:Float64} AND {high:Float64}',
+    );
+  });
 });
