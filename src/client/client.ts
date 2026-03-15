@@ -74,7 +74,7 @@ export function createClient<DB extends DatabaseSchema>(
       });
       const stream = result.stream<T>();
       for await (const rows of stream) {
-        yield rows.json();
+        yield rows.map((row) => row.json());
       }
     },
 
