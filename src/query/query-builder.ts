@@ -2,11 +2,15 @@ import type { CompiledQuery, DatabaseSchema, TableName } from './types.js';
 import { type ClickHouseParamType, Param } from './param.js';
 import { SelectBuilder } from './select-builder.js';
 import { InsertBuilder } from './insert-builder.js';
+import { DeleteBuilder } from './delete-builder.js';
+import { UpdateBuilder } from './update-builder.js';
 import { fn, Subquery } from './expressions.js';
 
 export interface QueryBuilder<DB extends DatabaseSchema> {
   selectFrom<T extends TableName<DB>>(table: T): SelectBuilder<DB, T>;
   insertInto<T extends TableName<DB>>(table: T): InsertBuilder<DB, T>;
+  deleteFrom<T extends TableName<DB>>(table: T): DeleteBuilder<DB, T>;
+  update<T extends TableName<DB>>(table: T): UpdateBuilder<DB, T>;
   param(name: string, type: ClickHouseParamType): Param;
   /** Wrap a compiled query as a subquery expression for use in WHERE IN / NOT IN. */
   subquery(builder: { compile(): CompiledQuery }): Subquery;
@@ -37,6 +41,12 @@ export function createQueryBuilder<DB extends DatabaseSchema>(): QueryBuilder<DB
     },
     insertInto<T extends TableName<DB>>(table: T) {
       return new InsertBuilder<DB, T>(table);
+    },
+    deleteFrom<T extends TableName<DB>>(table: T) {
+      return new DeleteBuilder<DB, T>(table);
+    },
+    update<T extends TableName<DB>>(table: T) {
+      return new UpdateBuilder<DB, T>(table);
     },
     param(name: string, type: ClickHouseParamType) {
       return new Param(name, type);

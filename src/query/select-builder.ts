@@ -391,6 +391,55 @@ export class SelectBuilder<
   }
 }
 
+type SetOperator = 'UNION ALL' | 'UNION DISTINCT' | 'INTERSECT' | 'EXCEPT';
+
+/** Combine multiple SELECT queries with a set operator (UNION ALL, UNION DISTINCT, INTERSECT, EXCEPT). */
+export function setOperation(
+  operator: SetOperator,
+  ...queries: { compile(): CompiledQuery }[]
+): CompiledQuery {
+  if (queries.length < 2) {
+    throw new Error(`${operator} requires at least two queries`);
+  }
+
+  const compiled = queries.map((q) => q.compile());
+  const params: Record<string, unknown> = {};
+  const seen = new Set<string>();
+
+  for (const c of compiled) {
+    for (const key of Object.keys(c.params)) {
+      if (seen.has(key)) {
+        throw new Error(`Param name collision: "${key}" appears in multiple ${operator} branches`);
+      }
+      seen.add(key);
+      params[key] = c.params[key];
+    }
+  }
+
+  const sql = compiled.map((c) => c.sql).join(`\n${operator}\n`);
+  return { sql, params };
+}
+
+/** Shorthand for UNION ALL. */
+export function unionAll(...queries: { compile(): CompiledQuery }[]): CompiledQuery {
+  return setOperation('UNION ALL', ...queries);
+}
+
+/** Shorthand for UNION DISTINCT. */
+export function unionDistinct(...queries: { compile(): CompiledQuery }[]): CompiledQuery {
+  return setOperation('UNION DISTINCT', ...queries);
+}
+
+/** Shorthand for INTERSECT. */
+export function intersect(...queries: { compile(): CompiledQuery }[]): CompiledQuery {
+  return setOperation('INTERSECT', ...queries);
+}
+
+/** Shorthand for EXCEPT. */
+export function except(...queries: { compile(): CompiledQuery }[]): CompiledQuery {
+  return setOperation('EXCEPT', ...queries);
+}
+
 /** Tracks params and their origin during compilation. */
 interface CompileContext {
   params: Record<string, unknown>;
