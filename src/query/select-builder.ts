@@ -19,7 +19,7 @@ import type {
   UnaryOp,
   WhereOp,
 } from './types.js';
-import { ConditionGroup, Expression } from './expressions.js';
+import { ConditionGroup, Expression, Subquery } from './expressions.js';
 import { Param } from './param.js';
 
 /** Valid ClickHouse setting name pattern. */
@@ -44,6 +44,11 @@ interface OrderByClause {
   direction: SortDirection;
 }
 
+interface CteClause {
+  name: string;
+  subquery: Subquery;
+}
+
 export class SelectBuilder<
   DB extends DatabaseSchema,
   T extends TableName<DB> = TableName<DB>,
@@ -53,7 +58,9 @@ export class SelectBuilder<
   private _tableAlias?: string;
   private _columns: (string | Expression)[] = [];
   private _distinct = false;
+  private _ctes: CteClause[] = [];
   private _wheres: WhereClause[] = [];
+  private _prewheres: WhereClause[] = [];
   private _joins: JoinClause[] = [];
   private _groupBy: string[] = [];
   private _havings: WhereClause[] = [];
@@ -76,6 +83,60 @@ export class SelectBuilder<
   /** Add DISTINCT to the SELECT clause. */
   distinct(): this {
     this._distinct = true;
+    return this;
+  }
+
+  /** Add a WITH (CTE) clause. The subquery is compiled and prepended to the query. */
+  with(name: string, subquery: Subquery | { compile(): { sql: string; params: Record<string, unknown> } }): this {
+    const sub = subquery instanceof Subquery ? subquery : new Subquery(subquery.compile());
+    this._ctes.push({ name, subquery: sub });
+    return this;
+  }
+
+  /** Add a PREWHERE condition (ClickHouse-specific optimization, applied before data is read from disk). */
+  prewhere(
+    column: ColumnName<DB, T> | Expression | string,
+    op: ComparisonOp,
+    value: Param | Expression,
+  ): this;
+  prewhere(
+    column: ColumnName<DB, T> | Expression | string,
+    op: SetOp,
+    value: Param | Expression,
+  ): this;
+  prewhere(
+    column: ColumnName<DB, T> | Expression | string,
+    op: UnaryOp,
+  ): this;
+  prewhere(
+    column: ColumnName<DB, T> | Expression | string,
+    op: BetweenOp,
+    value: [Param | Expression, Param | Expression],
+  ): this;
+  prewhere(condition: Expression): this;
+  prewhere(
+    columnOrCondition: ColumnName<DB, T> | Expression | string,
+    op?: WhereOp,
+    value?: Param | Expression | [Param | Expression, Param | Expression],
+  ): this {
+    // Reuse the same logic as where(), but push to _prewheres
+    if (columnOrCondition instanceof Expression && op === undefined) {
+      this._prewheres.push({ kind: 'expression', expr: columnOrCondition });
+      return this;
+    }
+    const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
+    if (op === 'IS NULL' || op === 'IS NOT NULL') {
+      this._prewheres.push({ kind: 'unary', column: col, op });
+      return this;
+    }
+    if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
+      if (!Array.isArray(value) || value.length < 2) {
+        throw new Error(`${op} requires a [low, high] tuple`);
+      }
+      this._prewheres.push({ kind: 'between', column: col, op, low: value[0]!, high: value[1]! });
+      return this;
+    }
+    this._prewheres.push({ kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression });
     return this;
   }
 
@@ -252,6 +313,15 @@ export class SelectBuilder<
     const params: Record<string, unknown> = {};
     const parts: string[] = [];
 
+    // WITH (CTE) clauses
+    if (this._ctes.length > 0) {
+      const cteParts = this._ctes.map((cte) => {
+        Object.assign(params, cte.subquery.subqueryParams);
+        return `${cte.name} AS ${cte.subquery.sql}`;
+      });
+      parts.push(`WITH ${cteParts.join(',\n')}`);
+    }
+
     const selectList =
       this._columns.length > 0
         ? this._columns.map((c) => (c instanceof Expression ? c.toString() : c)).join(', ')
@@ -271,6 +341,12 @@ export class SelectBuilder<
       } else {
         parts.push(`${j.type} ${joinTable} ON ${j.onLeft} = ${j.onRight}`);
       }
+    }
+
+    // PREWHERE (ClickHouse-specific, before WHERE)
+    if (this._prewheres.length > 0) {
+      const conditions = this._prewheres.map((w) => renderWhereClause(w, params));
+      parts.push(`PREWHERE ${conditions.join(' AND ')}`);
     }
 
     if (this._wheres.length > 0) {
@@ -313,6 +389,10 @@ export class SelectBuilder<
 }
 
 function renderValue(value: number | Param | Expression, params: Record<string, unknown>): string {
+  if (value instanceof Subquery) {
+    Object.assign(params, value.subqueryParams);
+    return value.sql;
+  }
   if (value instanceof Param) {
     params[value.name] = undefined;
     return value.toString();

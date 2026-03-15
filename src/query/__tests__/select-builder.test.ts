@@ -414,4 +414,188 @@ describe('SelectBuilder', () => {
       }).toThrow("contains invalid character: '");
     });
   });
+
+  describe('Subqueries', () => {
+    it('builds WHERE IN (subquery)', () => {
+      const inner = qb.selectFrom('events').select(['event_id']);
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .where('user_id', 'IN', qb.subquery(inner))
+        .compile();
+      expect(sql).toContain('WHERE user_id IN (SELECT event_id\nFROM events)');
+    });
+
+    it('builds WHERE NOT IN (subquery)', () => {
+      const inner = qb.selectFrom('events').select(['event_id']);
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('user_id', 'NOT IN', qb.subquery(inner))
+        .compile();
+      expect(sql).toContain('WHERE user_id NOT IN (SELECT event_id\nFROM events)');
+    });
+
+    it('merges params from subquery', () => {
+      const inner = qb
+        .selectFrom('events')
+        .select(['event_id'])
+        .where('type', '=', qb.param('eventType', 'String'));
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('user_id', 'IN', qb.subquery(inner))
+        .where('score', '>', qb.param('minScore', 'Float64'))
+        .compile();
+      expect(sql).toContain('WHERE user_id IN (SELECT event_id\nFROM events\nWHERE type = {eventType:String})');
+      expect(params).toHaveProperty('eventType');
+      expect(params).toHaveProperty('minScore');
+    });
+
+    it('combines subquery with other conditions', () => {
+      const inner = qb.selectFrom('events').select(['event_id']);
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('name', '!=', qb.param('name', 'String'))
+        .where('user_id', 'IN', qb.subquery(inner))
+        .compile();
+      expect(sql).toContain('WHERE name != {name:String} AND user_id IN (SELECT event_id');
+    });
+  });
+
+  describe('PREWHERE', () => {
+    it('builds PREWHERE with comparison', () => {
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .prewhere('score', '>', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).toContain('PREWHERE score > {min:Float64}');
+      expect(params).toHaveProperty('min');
+    });
+
+    it('places PREWHERE before WHERE', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .prewhere('score', '>', qb.param('min', 'Float64'))
+        .where('name', '=', qb.param('name', 'String'))
+        .compile();
+      const lines = sql.split('\n');
+      const prewhereIdx = lines.findIndex((l) => l.startsWith('PREWHERE'));
+      const whereIdx = lines.findIndex((l) => l.startsWith('WHERE'));
+      expect(prewhereIdx).toBeGreaterThan(-1);
+      expect(whereIdx).toBeGreaterThan(prewhereIdx);
+    });
+
+    it('builds PREWHERE with IS NULL', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .prewhere('score', 'IS NOT NULL')
+        .compile();
+      expect(sql).toContain('PREWHERE score IS NOT NULL');
+    });
+
+    it('builds PREWHERE with BETWEEN', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .prewhere('score', 'BETWEEN', [qb.param('low', 'Float64'), qb.param('high', 'Float64')])
+        .compile();
+      expect(sql).toContain('PREWHERE score BETWEEN {low:Float64} AND {high:Float64}');
+    });
+
+    it('builds PREWHERE with or() group', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .prewhere(or(
+          ['score', '>', qb.param('min', 'Float64')],
+          ['name', '=', qb.param('name', 'String')],
+        ))
+        .compile();
+      expect(sql).toContain('PREWHERE (score > {min:Float64} OR name = {name:String})');
+    });
+
+    it('builds multiple PREWHERE conditions', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .prewhere('score', '>', qb.param('min', 'Float64'))
+        .prewhere('name', '!=', qb.param('name', 'String'))
+        .compile();
+      expect(sql).toContain('PREWHERE score > {min:Float64} AND name != {name:String}');
+    });
+  });
+
+  describe('WITH / CTE', () => {
+    it('builds single CTE', () => {
+      const inner = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .where('score', '>', qb.param('min', 'Float64'));
+      const { sql, params } = qb
+        .selectFrom('users')
+        .with('active_users', inner)
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('WITH active_users AS (SELECT user_id, name\nFROM users\nWHERE score > {min:Float64})');
+      expect(sql).toContain('SELECT user_id\nFROM users');
+      expect(params).toHaveProperty('min');
+    });
+
+    it('builds multiple CTEs', () => {
+      const cte1 = qb.selectFrom('users').select(['user_id']);
+      const cte2 = qb.selectFrom('events').select(['event_id']);
+      const { sql } = qb
+        .selectFrom('users')
+        .with('active', cte1)
+        .with('recent', cte2)
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('WITH active AS (SELECT user_id\nFROM users)');
+      expect(sql).toContain('recent AS (SELECT event_id\nFROM events)');
+    });
+
+    it('places WITH before SELECT', () => {
+      const inner = qb.selectFrom('users').select(['user_id']);
+      const { sql } = qb
+        .selectFrom('users')
+        .with('cte', inner)
+        .select(['user_id'])
+        .compile();
+      const lines = sql.split('\n');
+      const withIdx = lines.findIndex((l) => l.startsWith('WITH'));
+      const selectIdx = lines.findIndex((l) => l.startsWith('SELECT'));
+      expect(withIdx).toBeLessThan(selectIdx);
+    });
+
+    it('accepts Subquery directly', () => {
+      const compiled = qb.selectFrom('users').select(['user_id']).compile();
+      const sub = qb.subquery({ compile: () => compiled });
+      const { sql } = qb
+        .selectFrom('users')
+        .with('cte', sub)
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('WITH cte AS (SELECT user_id\nFROM users)');
+    });
+
+    it('merges params from CTE and main query', () => {
+      const inner = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('score', '>', qb.param('cteMin', 'Float64'));
+      const { params } = qb
+        .selectFrom('users')
+        .with('active', inner)
+        .select(['user_id'])
+        .where('name', '=', qb.param('name', 'String'))
+        .compile();
+      expect(params).toHaveProperty('cteMin');
+      expect(params).toHaveProperty('name');
+    });
+  });
 });

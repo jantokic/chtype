@@ -1,3 +1,4 @@
+import type { CompiledQuery } from './types.js';
 import { Param } from './param.js';
 
 /** Represents a raw SQL expression with an optional alias. */
@@ -57,6 +58,16 @@ export function or(...conditions: (ConditionTuple | Expression)[]): ConditionGro
 /** Group conditions with AND. */
 export function and(...conditions: (ConditionTuple | Expression)[]): ConditionGroup {
   return new ConditionGroup(conditions, 'AND');
+}
+
+/** A subquery expression — wraps a compiled SELECT in parentheses and carries its params. */
+export class Subquery extends Expression {
+  readonly subqueryParams: Record<string, unknown>;
+
+  constructor(compiled: CompiledQuery) {
+    super(`(${compiled.sql})`);
+    this.subqueryParams = compiled.params;
+  }
 }
 
 /** ClickHouse function builders. */
