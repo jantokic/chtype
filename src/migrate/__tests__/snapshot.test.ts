@@ -75,4 +75,34 @@ describe('saveSnapshot / loadSnapshot', () => {
       await unlink(filePath).catch(() => {});
     }
   });
+
+  it('rejects snapshot with null table entries', async () => {
+    const filePath = join(tmpdir(), `chtype-test-null-${Date.now()}.json`);
+    const { writeFile } = await import('node:fs/promises');
+    const bad = JSON.stringify({
+      meta: { version: 1, createdAt: '2026-01-01T00:00:00Z', database: 'db' },
+      tables: [null],
+    });
+    try {
+      await writeFile(filePath, bad, 'utf-8');
+      await expect(loadSnapshot(filePath)).rejects.toThrow('Invalid snapshot file');
+    } finally {
+      await unlink(filePath).catch(() => {});
+    }
+  });
+
+  it('rejects snapshot with table entries missing columns', async () => {
+    const filePath = join(tmpdir(), `chtype-test-nocols-${Date.now()}.json`);
+    const { writeFile } = await import('node:fs/promises');
+    const bad = JSON.stringify({
+      meta: { version: 1, createdAt: '2026-01-01T00:00:00Z', database: 'db' },
+      tables: [{ name: 'users' }],
+    });
+    try {
+      await writeFile(filePath, bad, 'utf-8');
+      await expect(loadSnapshot(filePath)).rejects.toThrow('Invalid snapshot file');
+    } finally {
+      await unlink(filePath).catch(() => {});
+    }
+  });
 });

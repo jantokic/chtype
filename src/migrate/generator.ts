@@ -38,6 +38,10 @@ export function generateSQL(diff: SchemaDiff): string[] {
 
 /**
  * Generate a CREATE TABLE statement from a full table definition.
+ *
+ * Note: sortingKey, partitionKey, defaultExpression, and other values are
+ * trusted inputs from introspect.ts (sourced from system tables), not
+ * user-supplied strings, so they are emitted as-is without sanitization.
  */
 export function generateCreateTable(table: IntrospectedTable): string {
   const columns = table.columns.map((col) => {
@@ -54,13 +58,16 @@ export function generateCreateTable(table: IntrospectedTable): string {
   let sql = `CREATE TABLE ${quoteIdentifier(table.name)}\n(\n${columns.join(',\n')}\n)`;
   sql += `\nENGINE = ${table.engineFull || table.engine}`;
 
-  if (table.partitionKey) {
+  // ORDER BY, PARTITION BY, and PRIMARY KEY are only valid for MergeTree-family engines.
+  // Emitting them for Log, Memory, Kafka, etc. produces invalid DDL.
+  const isMergeTree = table.engine.includes('MergeTree');
+  if (isMergeTree && table.partitionKey) {
     sql += `\nPARTITION BY ${table.partitionKey}`;
   }
-  if (table.sortingKey) {
+  if (isMergeTree && table.sortingKey) {
     sql += `\nORDER BY (${table.sortingKey})`;
   }
-  if (table.primaryKey && table.primaryKey !== table.sortingKey) {
+  if (isMergeTree && table.primaryKey && table.primaryKey !== table.sortingKey) {
     sql += `\nPRIMARY KEY (${table.primaryKey})`;
   }
   if (table.comment) {

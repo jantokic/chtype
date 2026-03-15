@@ -66,5 +66,14 @@ function isSnapshot(value: unknown): value is Snapshot {
   if (typeof meta['createdAt'] !== 'string') return false;
   if (typeof meta['database'] !== 'string') return false;
   if (!Array.isArray(obj['tables'])) return false;
+
+  // Validate each table entry has the minimum required shape
+  for (const entry of obj['tables'] as unknown[]) {
+    if (typeof entry !== 'object' || entry === null) return false;
+    const table = entry as Record<string, unknown>;
+    if (typeof table['name'] !== 'string') return false;
+    if (!Array.isArray(table['columns'])) return false;
+  }
+
   return true;
 }

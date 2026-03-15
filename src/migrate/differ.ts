@@ -32,6 +32,10 @@ export interface SchemaDiff {
 /**
  * Compare two IntrospectedColumn values and return true if they differ
  * in type, default kind, default expression, or comment.
+ *
+ * Key membership flags (isInSortingKey, isInPrimaryKey, isInPartitionKey) are
+ * intentionally excluded — changing ORDER BY / PARTITION BY requires table
+ * recreation in ClickHouse, which is out of scope for column-level diffing.
  */
 export function columnsEqual(a: IntrospectedColumn, b: IntrospectedColumn): boolean {
   return (

@@ -113,6 +113,30 @@ describe('generateCreateTable', () => {
     expect(sql).toContain('CREATE TABLE `my-table`');
     expect(sql).toContain('`hyphen-col` String');
   });
+
+  it('omits ORDER BY / PARTITION BY / PRIMARY KEY for non-MergeTree engines', () => {
+    const table = makeTable({
+      name: 'buffer',
+      engine: 'Memory',
+      engineFull: 'Memory()',
+      sortingKey: 'id',
+      partitionKey: 'toYYYYMM(ts)',
+      primaryKey: 'id',
+      columns: [makeColumn({ name: 'id', type: 'String' })],
+    });
+    const sql = generateCreateTable(table);
+    expect(sql).toContain('ENGINE = Memory()');
+    expect(sql).not.toContain('ORDER BY');
+    expect(sql).not.toContain('PARTITION BY');
+    expect(sql).not.toContain('PRIMARY KEY');
+  });
+
+  it('handles a table with zero columns', () => {
+    const table = makeTable({ name: 'empty', columns: [] });
+    const sql = generateCreateTable(table);
+    expect(sql).toContain('CREATE TABLE empty');
+    expect(sql).toContain('(\n\n)');
+  });
 });
 
 describe('generateDropTable', () => {

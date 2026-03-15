@@ -192,4 +192,31 @@ describe('diffSchemas', () => {
     const diff = diffSchemas([table], [table]);
     expect(diff.isEmpty).toBe(true);
   });
+
+  it('returns empty diff for two empty schemas', () => {
+    const diff = diffSchemas([], []);
+    expect(diff.isEmpty).toBe(true);
+    expect(diff.tables).toHaveLength(0);
+  });
+
+  it('treats all tables as added when from is empty', () => {
+    const to = [
+      makeTable({ name: 'users' }),
+      makeTable({ name: 'events' }),
+      makeTable({ name: 'logs' }),
+    ];
+    const diff = diffSchemas([], to);
+    expect(diff.tables).toHaveLength(3);
+    expect(diff.tables.every((t) => t.action === 'add')).toBe(true);
+  });
+
+  it('treats all tables as dropped when to is empty', () => {
+    const from = [
+      makeTable({ name: 'users' }),
+      makeTable({ name: 'events' }),
+    ];
+    const diff = diffSchemas(from, []);
+    expect(diff.tables).toHaveLength(2);
+    expect(diff.tables.every((t) => t.action === 'drop')).toBe(true);
+  });
 });
