@@ -131,8 +131,11 @@ export class SelectBuilder<
     }
 
     // Between: BETWEEN / NOT BETWEEN
-    if ((op === 'BETWEEN' || op === 'NOT BETWEEN') && Array.isArray(value)) {
-      this._wheres.push({ kind: 'between', column: col, op, low: value[0], high: value[1] });
+    if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
+      if (!Array.isArray(value) || value.length < 2) {
+        throw new Error(`${op} requires a [low, high] tuple`);
+      }
+      this._wheres.push({ kind: 'between', column: col, op, low: value[0]!, high: value[1]! });
       return this;
     }
 
@@ -231,11 +234,14 @@ export class SelectBuilder<
     return this;
   }
 
-  /** Add SETTINGS clause. Keys are validated to prevent injection. */
+  /** Add SETTINGS clause. Keys and string values are validated to prevent injection. */
   settings(s: Record<string, string | number | boolean>): this {
-    for (const key of Object.keys(s)) {
+    for (const [key, val] of Object.entries(s)) {
       if (!VALID_SETTING_KEY.test(key)) {
         throw new Error(`Invalid ClickHouse setting name: "${key}"`);
+      }
+      if (typeof val === 'string' && val.includes("'")) {
+        throw new Error(`Setting value for "${key}" contains invalid character: '`);
       }
     }
     Object.assign(this._settings, s);

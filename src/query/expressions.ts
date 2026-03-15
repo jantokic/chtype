@@ -34,6 +34,10 @@ export class ConditionGroup extends Expression {
         return c.sql;
       }
       const [col, op, val] = c;
+      if (val instanceof ConditionGroup) {
+        params.push(...val.params);
+        return `${col} ${op} ${val.sql}`;
+      }
       if (val instanceof Param) {
         params.push(val);
         return `${col} ${op} ${val.toString()}`;

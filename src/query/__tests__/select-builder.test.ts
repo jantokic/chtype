@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { createQueryBuilder } from '../query-builder.js';
-import { or, and } from '../expressions.js';
+import { or, and, fn } from '../expressions.js';
 import type { DatabaseSchema } from '../types.js';
 
 interface TestDB extends DatabaseSchema {
@@ -381,6 +381,37 @@ describe('SelectBuilder', () => {
       expect(sql).toContain(
         'WHERE ((score > {min:Float64} OR score < {neg:Float64}) AND name != {name:String})',
       );
+    });
+
+    it('handles Expression value inside or() tuple', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where(or(
+          ['updated_at', '>', fn.raw('now()')],
+          ['score', '=', qb.param('score', 'Float64')],
+        ))
+        .compile();
+      expect(sql).toContain('(updated_at > now() OR score = {score:Float64})');
+    });
+  });
+
+  describe('BETWEEN with Expression bounds', () => {
+    it('builds BETWEEN with Expression bounds', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('updated_at', 'BETWEEN', [fn.raw("toStartOfDay(now())"), fn.raw('now()')])
+        .compile();
+      expect(sql).toContain('WHERE updated_at BETWEEN toStartOfDay(now()) AND now()');
+    });
+  });
+
+  describe('settings injection prevention', () => {
+    it('rejects string values with single quotes', () => {
+      expect(() => {
+        qb.selectFrom('users').settings({ log_comment: "foo' , inject = 'bar" });
+      }).toThrow("contains invalid character: '");
     });
   });
 });
