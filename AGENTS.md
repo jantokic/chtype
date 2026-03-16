@@ -74,7 +74,7 @@ bun run build            # Compile to dist/
 - **Strict mode always.** Never use `any` — use `unknown` and narrow.
 - **No enums.** Use union types (`type Foo = 'a' | 'b'`).
 - **Explicit return types** on public API functions.
-- **Interface over type** for object shapes.
+- **Interface over type** for object shapes (exception: generated `Database` uses `type` alias to satisfy `DatabaseSchema` index signature).
 - **`.js` extension** in all relative imports (ESM resolution).
 - Module system: ESNext modules, ES2022 target.
 
