@@ -29,6 +29,7 @@ export interface IntrospectedTable {
   primaryKey: string;
   comment: string;
   columns: IntrospectedColumn[];
+  source?: string;
 }
 
 export interface IntrospectOptions {
@@ -44,6 +45,7 @@ interface SystemTableRow {
   partition_key: string;
   primary_key: string;
   comment: string;
+  as_select: string;
 }
 
 interface SystemColumnRow {
@@ -70,7 +72,7 @@ export async function introspect(
 ): Promise<IntrospectedTable[]> {
   const tablesResult = await client.query({
     query: `
-      SELECT name, engine, engine_full, sorting_key, partition_key, primary_key, comment
+      SELECT name, engine, engine_full, sorting_key, partition_key, primary_key, comment, as_select
       FROM system.tables
       WHERE database = {database:String}
         AND name NOT LIKE '.inner.%'
@@ -101,7 +103,7 @@ export async function introspect(
 
     const columnRows = await columnsResult.json<SystemColumnRow>();
 
-    tables.push({
+    const entry: IntrospectedTable = {
       name: table.name,
       engine: table.engine,
       engineFull: table.engine_full,
@@ -120,7 +122,14 @@ export async function introspect(
         isInPrimaryKey: col.is_in_primary_key === 1,
         isInPartitionKey: col.is_in_partition_key === 1,
       })),
-    });
+    };
+
+    if (table.engine === 'MaterializedView') {
+      const src = parseSourceTable(table.as_select);
+      if (src) entry.source = src;
+    }
+
+    tables.push(entry);
   }
 
   return tables;
@@ -162,6 +171,15 @@ export function parseVersionColumn(engine: string, engineFull: string): string |
   if (lastArg.startsWith("'") || lastArg.startsWith('"')) return null;
 
   return lastArg;
+}
+
+export function parseSourceTable(asSelect: string): string | null {
+  if (!asSelect) return null;
+  const match = asSelect.match(/\bFROM\s+([\s\S]+?)(?:\s+(?:WHERE|GROUP|ORDER|LIMIT|HAVING|PREWHERE|UNION|INTERSECT|EXCEPT|SETTINGS|FORMAT|INTO|;)|$)/i);
+  if (!match) return null;
+  const raw = match[1]!.trim().replace(/`/g, '');
+  const parts = raw.split('.');
+  return parts[parts.length - 1]!;
 }
 
 export function schemaHash(tables: IntrospectedTable[]): string {

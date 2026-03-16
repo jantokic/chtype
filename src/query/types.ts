@@ -2,9 +2,10 @@
 export interface DatabaseSchema {
   [tableName: string]: {
     row: Record<string, unknown>;
-    insert: Record<string, unknown>;
+    insert?: Record<string, unknown>;
     engine: string;
-    versionColumn: string | null;
+    versionColumn?: string | null;
+    source?: string | null;
   };
 }
 

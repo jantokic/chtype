@@ -112,6 +112,73 @@ describe('generate', () => {
     expect(output).toContain('status: "active" | "inactive" | "banned";');
   });
 
+  it('generates Row but no Insert for MaterializedView', () => {
+    const mv: IntrospectedTable = {
+      name: 'daily_stats',
+      engine: 'MaterializedView',
+      engineFull: 'MaterializedView',
+      versionColumn: null,
+      sortingKey: '',
+      partitionKey: '',
+      primaryKey: '',
+      comment: '',
+      source: 'events',
+      columns: [
+        { name: 'date', type: 'Date', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+        { name: 'event_type', type: 'String', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+        { name: 'count', type: 'UInt64', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+      ],
+    };
+    const output = generate([mv], { database: 'test_db' });
+    expect(output).toContain('export type DailyStatsRow = {');
+    expect(output).not.toContain('DailyStatsInsert');
+    expect(output).toContain('engine: "MaterializedView"');
+    expect(output).toContain('source: "events"');
+    expect(output).not.toContain('insert:');
+    expect(output).not.toContain('versionColumn');
+  });
+
+  it('includes source table in JSDoc for MaterializedView', () => {
+    const mv: IntrospectedTable = {
+      name: 'daily_stats',
+      engine: 'MaterializedView',
+      engineFull: 'MaterializedView',
+      versionColumn: null,
+      sortingKey: '',
+      partitionKey: '',
+      primaryKey: '',
+      comment: '',
+      source: 'events',
+      columns: [
+        { name: 'date', type: 'Date', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+      ],
+    };
+    const output = generate([mv], { database: 'test_db' });
+    expect(output).toContain('Source table: events');
+  });
+
+  it('generates both regular and MV tables in Database type', () => {
+    const mv: IntrospectedTable = {
+      name: 'daily_stats',
+      engine: 'MaterializedView',
+      engineFull: 'MaterializedView',
+      versionColumn: null,
+      sortingKey: '',
+      partitionKey: '',
+      primaryKey: '',
+      comment: '',
+      source: 'events',
+      columns: [
+        { name: 'count', type: 'UInt64', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+      ],
+    };
+    const output = generate([sampleTable, mv], { database: 'test_db' });
+    expect(output).toContain('insert: UsersInsert;');
+    expect(output).toContain('engine: "ReplacingMergeTree"');
+    expect(output).toContain('engine: "MaterializedView"');
+    expect(output).toContain('source: "events"');
+  });
+
   it('applies insertCoerce to Insert but not Row', () => {
     const table: IntrospectedTable = {
       ...sampleTable,

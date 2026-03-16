@@ -49,8 +49,8 @@ export function columnsEqual(a: IntrospectedColumn, b: IntrospectedColumn): bool
 /**
  * Diff two schemas and produce a list of table-level and column-level changes.
  *
- * @param from - The current / source schema (e.g. production snapshot).
- * @param to   - The desired / target schema (e.g. dev database).
+ * @param from - The previous schema (e.g. saved snapshot).
+ * @param to   - The current / live schema (e.g. introspected from database).
  * @returns A SchemaDiff describing every change needed to go from `from` to `to`.
  */
 export function diffSchemas(from: IntrospectedTable[], to: IntrospectedTable[]): SchemaDiff {
@@ -83,6 +83,55 @@ export function diffSchemas(from: IntrospectedTable[], to: IntrospectedTable[]):
   }
 
   return { tables, isEmpty: tables.length === 0 };
+}
+
+export function formatDiff(diff: SchemaDiff): string {
+  if (diff.isEmpty) return 'No changes detected.';
+
+  const lines: string[] = [];
+
+  for (const td of diff.tables) {
+    switch (td.action) {
+      case 'add': {
+        const engine = td.definition ? ` (${td.definition.engine})` : '';
+        lines.push(`+ ${td.table}${engine}`);
+        if (td.definition) {
+          for (const col of td.definition.columns) {
+            lines.push(`    ${col.name} (${col.type})`);
+          }
+        }
+        break;
+      }
+      case 'drop':
+        lines.push(`- ${td.table}`);
+        break;
+      case 'modify': {
+        lines.push(`~ ${td.table}:`);
+        if (td.columns) {
+          for (const cd of td.columns) {
+            switch (cd.action) {
+              case 'add':
+                lines.push(`    + ${cd.column.name} (${cd.column.type})`);
+                break;
+              case 'drop':
+                lines.push(`    - ${cd.column.name}`);
+                break;
+              case 'modify':
+                if (cd.previous) {
+                  lines.push(`    ~ ${cd.column.name}: ${cd.previous.type} -> ${cd.column.type}`);
+                } else {
+                  lines.push(`    ~ ${cd.column.name} (${cd.column.type})`);
+                }
+                break;
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  return lines.join('\n');
 }
 
 /**

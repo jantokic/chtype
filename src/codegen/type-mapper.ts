@@ -96,6 +96,9 @@ export function mapClickHouseType(chType: string, options: TypeMapperOptions = {
     return mapClickHouseType(aggMatch[1]!, options);
   }
 
+  if (t === 'JSON' || t === 'Object(\'json\')') return 'Record<string, unknown>';
+  if (t === 'Dynamic') return 'unknown';
+
   if (t.startsWith('Decimal')) return options.insertCoerce ? 'number | string' : 'string';
   if (t.startsWith('DateTime64')) return options.insertCoerce ? 'number | string' : 'string';
   if (t.startsWith('FixedString')) return 'string';

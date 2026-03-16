@@ -156,6 +156,24 @@ describe('mapClickHouseType', () => {
     });
   });
 
+  describe('JSON and Dynamic types', () => {
+    it('JSON → Record<string, unknown>', () => {
+      expect(mapClickHouseType('JSON')).toBe('Record<string, unknown>');
+    });
+    it("Object('json') → Record<string, unknown>", () => {
+      expect(mapClickHouseType("Object('json')")).toBe('Record<string, unknown>');
+    });
+    it('Nullable(JSON) → Record<string, unknown> | null', () => {
+      expect(mapClickHouseType('Nullable(JSON)')).toBe('Record<string, unknown> | null');
+    });
+    it('Array(JSON) → Record<string, unknown>[]', () => {
+      expect(mapClickHouseType('Array(JSON)')).toBe('Record<string, unknown>[]');
+    });
+    it('Dynamic → unknown', () => {
+      expect(mapClickHouseType('Dynamic')).toBe('unknown');
+    });
+  });
+
   describe('edge cases', () => {
     it('normalizes whitespace', () => {
       expect(mapClickHouseType('  Array( String )  ')).toBe('string[]');

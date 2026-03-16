@@ -45,11 +45,16 @@ function jsdoc(lines: string[]): string {
   return `/**\n${lines.map((l) => ` * ${l}`).join('\n')}\n */\n`;
 }
 
+function isMaterializedView(table: IntrospectedTable): boolean {
+  return table.engine === 'MaterializedView';
+}
+
 function generateRowInterface(table: IntrospectedTable, options: GeneratorOptions): string {
   const docLines = [
     `Table: \`${table.name}\``,
     `Engine: ${table.engineFull || table.engine}`,
   ];
+  if (table.source) docLines.push(`Source table: ${table.source}`);
   if (table.sortingKey) docLines.push(`ORDER BY: (${table.sortingKey})`);
   if (table.partitionKey) docLines.push(`PARTITION BY: ${table.partitionKey}`);
   if (table.versionColumn) docLines.push(`Version column: ${table.versionColumn}`);
@@ -87,6 +92,11 @@ function generateDatabaseType(tables: IntrospectedTable[]): string {
     const engineLiteral = JSON.stringify(table.engine);
     const versionLiteral = table.versionColumn ? JSON.stringify(table.versionColumn) : 'null';
 
+    if (isMaterializedView(table)) {
+      const sourceLiteral = table.source ? JSON.stringify(table.source) : 'null';
+      return `  ${quoteProperty(table.name)}: {\n    row: ${rowName(table.name)};\n    engine: ${engineLiteral};\n    source: ${sourceLiteral};\n  };`;
+    }
+
     return `  ${quoteProperty(table.name)}: {\n    row: ${rowName(table.name)};\n    insert: ${insertName(table.name)};\n    engine: ${engineLiteral};\n    versionColumn: ${versionLiteral};\n  };`;
   });
 
@@ -107,8 +117,10 @@ export function generate(tables: IntrospectedTable[], options: GeneratorOptions)
 
   for (const table of tables) {
     sections.push(generateRowInterface(table, options));
-    const insertIface = generateInsertInterface(table, options);
-    if (insertIface) sections.push(insertIface);
+    if (!isMaterializedView(table)) {
+      const insertIface = generateInsertInterface(table, options);
+      if (insertIface) sections.push(insertIface);
+    }
   }
 
   sections.push(generateDatabaseType(tables));

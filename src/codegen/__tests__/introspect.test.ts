@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { parseVersionColumn, matchesPattern, filterTables, schemaHash } from '../introspect.js';
+import { parseVersionColumn, parseSourceTable, matchesPattern, filterTables, schemaHash } from '../introspect.js';
 import type { IntrospectedTable } from '../introspect.js';
 
 describe('parseVersionColumn', () => {
@@ -30,6 +30,30 @@ describe('parseVersionColumn', () => {
   });
   it('returns null for non-replacing engines', () => {
     expect(parseVersionColumn('SummingMergeTree', 'SummingMergeTree(amount)')).toBeNull();
+  });
+});
+
+describe('parseSourceTable', () => {
+  it('extracts table from simple SELECT', () => {
+    expect(parseSourceTable('SELECT date, count() FROM events GROUP BY date')).toBe('events');
+  });
+  it('extracts table from backtick-quoted name', () => {
+    expect(parseSourceTable('SELECT * FROM `my_events`')).toBe('my_events');
+  });
+  it('extracts table from database-qualified name', () => {
+    expect(parseSourceTable('SELECT * FROM my_db.events')).toBe('events');
+  });
+  it('returns null for empty string', () => {
+    expect(parseSourceTable('')).toBeNull();
+  });
+  it('returns null when no FROM clause', () => {
+    expect(parseSourceTable('SELECT 1')).toBeNull();
+  });
+  it('handles case insensitive FROM', () => {
+    expect(parseSourceTable('select * from events')).toBe('events');
+  });
+  it('extracts table from backtick-qualified db.table', () => {
+    expect(parseSourceTable('SELECT * FROM `my_db`.`events`')).toBe('events');
   });
 });
 
@@ -94,10 +118,10 @@ describe('schemaHash', () => {
 
 describe('filterTables', () => {
   const tables = [
-    { name: 'users', engine: '', engine_full: '', sorting_key: '', partition_key: '', primary_key: '', comment: '' },
-    { name: 'events', engine: '', engine_full: '', sorting_key: '', partition_key: '', primary_key: '', comment: '' },
-    { name: 'market_data', engine: '', engine_full: '', sorting_key: '', partition_key: '', primary_key: '', comment: '' },
-    { name: 'market_stats', engine: '', engine_full: '', sorting_key: '', partition_key: '', primary_key: '', comment: '' },
+    { name: 'users', engine: '', engine_full: '', sorting_key: '', partition_key: '', primary_key: '', comment: '', as_select: '' },
+    { name: 'events', engine: '', engine_full: '', sorting_key: '', partition_key: '', primary_key: '', comment: '', as_select: '' },
+    { name: 'market_data', engine: '', engine_full: '', sorting_key: '', partition_key: '', primary_key: '', comment: '', as_select: '' },
+    { name: 'market_stats', engine: '', engine_full: '', sorting_key: '', partition_key: '', primary_key: '', comment: '', as_select: '' },
   ];
 
   it('returns all when no filters', () => {

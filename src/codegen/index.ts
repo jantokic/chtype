@@ -3,6 +3,7 @@ export { generate, type GeneratorOptions } from './generator.js';
 export {
   introspect,
   parseVersionColumn,
+  parseSourceTable,
   matchesPattern,
   filterTables,
   schemaHash,

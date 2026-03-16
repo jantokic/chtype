@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { IntrospectedColumn, IntrospectedTable } from '../../codegen/introspect.js';
-import { columnsEqual, diffSchemas } from '../differ.js';
+import { columnsEqual, diffSchemas, formatDiff } from '../differ.js';
 
 function makeColumn(overrides: Partial<IntrospectedColumn> = {}): IntrospectedColumn {
   return {
@@ -218,5 +218,67 @@ describe('diffSchemas', () => {
     const diff = diffSchemas(from, []);
     expect(diff.tables).toHaveLength(2);
     expect(diff.tables.every((t) => t.action === 'drop')).toBe(true);
+  });
+});
+
+describe('formatDiff', () => {
+  it('returns no changes message for empty diff', () => {
+    expect(formatDiff({ tables: [], isEmpty: true })).toBe('No changes detected.');
+  });
+
+  it('formats added table', () => {
+    const diff = diffSchemas([], [makeTable({ name: 'events', columns: [makeColumn({ name: 'id' })] })]);
+    const output = formatDiff(diff);
+    expect(output).toContain('+ events (MergeTree)');
+    expect(output).toContain('    id (String)');
+  });
+
+  it('formats dropped table', () => {
+    const diff = diffSchemas([makeTable({ name: 'legacy' })], []);
+    const output = formatDiff(diff);
+    expect(output).toContain('- legacy');
+  });
+
+  it('formats modified table with added column', () => {
+    const from = [makeTable({ name: 'users', columns: [makeColumn({ name: 'id' })] })];
+    const to = [makeTable({ name: 'users', columns: [makeColumn({ name: 'id' }), makeColumn({ name: 'email' })] })];
+    const diff = diffSchemas(from, to);
+    const output = formatDiff(diff);
+    expect(output).toContain('~ users:');
+    expect(output).toContain('    + email (String)');
+  });
+
+  it('formats modified table with dropped column', () => {
+    const from = [makeTable({ name: 'users', columns: [makeColumn({ name: 'id' }), makeColumn({ name: 'old_col' })] })];
+    const to = [makeTable({ name: 'users', columns: [makeColumn({ name: 'id' })] })];
+    const diff = diffSchemas(from, to);
+    const output = formatDiff(diff);
+    expect(output).toContain('~ users:');
+    expect(output).toContain('    - old_col');
+  });
+
+  it('formats modified column type change', () => {
+    const from = [makeTable({ name: 'events', columns: [makeColumn({ name: 'count', type: 'UInt32' })] })];
+    const to = [makeTable({ name: 'events', columns: [makeColumn({ name: 'count', type: 'UInt64' })] })];
+    const diff = diffSchemas(from, to);
+    const output = formatDiff(diff);
+    expect(output).toContain('~ events:');
+    expect(output).toContain('    ~ count: UInt32 -> UInt64');
+  });
+
+  it('formats mixed changes across multiple tables', () => {
+    const from = [
+      makeTable({ name: 'users', columns: [makeColumn({ name: 'id' })] }),
+      makeTable({ name: 'sessions', columns: [makeColumn({ name: 'id' })] }),
+    ];
+    const to = [
+      makeTable({ name: 'users', columns: [makeColumn({ name: 'id' }), makeColumn({ name: 'email' })] }),
+      makeTable({ name: 'events', columns: [makeColumn({ name: 'id' })] }),
+    ];
+    const diff = diffSchemas(from, to);
+    const output = formatDiff(diff);
+    expect(output).toContain('- sessions');
+    expect(output).toContain('~ users:');
+    expect(output).toContain('+ events (MergeTree)');
   });
 });

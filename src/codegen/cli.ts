@@ -14,6 +14,8 @@ import { resolve } from 'node:path';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
 import { defineCommand, runMain } from 'citty';
+import { diffSchemas, formatDiff } from '../migrate/differ.js';
+import { createSnapshot, loadSnapshot, saveSnapshot } from '../migrate/snapshot.js';
 import { type ChtypeConfig, ChtypeConfigSchema, loadConfigFile } from './config.js';
 import { generate } from './generator.js';
 import { type IntrospectedTable, introspect, schemaHash } from './introspect.js';
@@ -49,6 +51,10 @@ function resolveConfig(args: {
   });
 }
 
+function snapshotPath(outputPath: string): string {
+  return outputPath.replace(/\.[^./\\]+$/, '') + '.snapshot.json';
+}
+
 async function runGenerate(
   client: ClickHouseClient,
   config: ChtypeConfig,
@@ -72,6 +78,10 @@ async function runGenerate(
   const outPath = resolve(config.output);
   writeFileSync(outPath, output, 'utf-8');
   console.log(`\nWrote ${tables.length} table types to ${outPath}`);
+
+  const snap = createSnapshot(tables, config.connection.database);
+  const snapPath = snapshotPath(outPath);
+  await saveSnapshot(snap, snapPath);
 
   return { tables, hash };
 }
@@ -161,6 +171,72 @@ const generateCommand = defineCommand({
   },
 });
 
+const diffCommand = defineCommand({
+  meta: {
+    name: 'diff',
+    description: 'Compare current database schema against the last generated types',
+  },
+  args: {
+    host: { type: 'string', description: 'ClickHouse HTTP URL', default: 'http://localhost:8123' },
+    database: { type: 'string', description: 'Database name' },
+    username: { type: 'string', description: 'ClickHouse username', default: 'default' },
+    password: { type: 'string', description: 'ClickHouse password', default: '' },
+    output: { type: 'string', alias: 'o', description: 'Output file path', default: './chtype.generated.ts' },
+    include: { type: 'string', description: 'Comma-separated table name patterns to include' },
+    exclude: { type: 'string', description: 'Comma-separated table name patterns to exclude' },
+    config: { type: 'string', alias: 'c', description: 'Path to config file (chtype.config.ts)' },
+    snapshot: { type: 'string', description: 'Path to snapshot file (overrides default)' },
+  },
+  async run({ args }) {
+    const config = await resolveConfig(args);
+
+    if (!config.connection.database) {
+      console.error('Error: --database is required');
+      process.exit(1);
+    }
+
+    const snapFile = args.snapshot
+      ? resolve(args.snapshot)
+      : snapshotPath(resolve(config.output));
+
+    let previousTables;
+    try {
+      const snap = await loadSnapshot(snapFile);
+      previousTables = snap.tables;
+    } catch {
+      console.error(`No snapshot found at ${snapFile}`);
+      console.error('Run "chtype generate" first to create a snapshot.');
+      process.exit(1);
+    }
+
+    console.log(`Connecting to ${config.connection.host}...`);
+    console.log(`Database: ${config.connection.database}`);
+
+    const client = createClient({
+      url: config.connection.host,
+      database: config.connection.database,
+      username: config.connection.username,
+      password: config.connection.password,
+    });
+
+    try {
+      const currentTables = await introspect(client, config.connection.database, {
+        include: config.include,
+        exclude: config.exclude,
+      });
+
+      const diff = diffSchemas(previousTables, currentTables);
+      console.log(`\n${formatDiff(diff)}`);
+
+      if (!diff.isEmpty) {
+        process.exit(1);
+      }
+    } finally {
+      await client.close();
+    }
+  },
+});
+
 const main = defineCommand({
   meta: {
     name: 'chtype',
@@ -169,6 +245,7 @@ const main = defineCommand({
   },
   subCommands: {
     generate: generateCommand,
+    diff: diffCommand,
   },
 });
 

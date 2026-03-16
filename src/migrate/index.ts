@@ -1,6 +1,7 @@
 export {
   diffSchemas,
   columnsEqual,
+  formatDiff,
   type ColumnDiff,
   type TableDiff,
   type SchemaDiff,
