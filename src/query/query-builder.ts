@@ -98,6 +98,9 @@ export function createQueryBuilder<DB extends DatabaseSchema>(): QueryBuilder<DB
       return createWithBuilder(name, builder, []);
     },
     insertFrom(table: string, selectQuery: { compile(): CompiledQuery<unknown> }) {
+      if (!VALID_IDENTIFIER.test(table)) {
+        throw new Error(`Invalid table name: "${table}"`);
+      }
       return {
         compile(): CompiledQuery {
           const compiled = selectQuery.compile();
@@ -106,6 +109,9 @@ export function createQueryBuilder<DB extends DatabaseSchema>(): QueryBuilder<DB
       };
     },
     truncate(table: string) {
+      if (!VALID_IDENTIFIER.test(table)) {
+        throw new Error(`Invalid table name: "${table}"`);
+      }
       return {
         compile(): CompiledQuery {
           return { sql: `TRUNCATE TABLE ${table}`, params: {} };
@@ -113,6 +119,12 @@ export function createQueryBuilder<DB extends DatabaseSchema>(): QueryBuilder<DB
       };
     },
     exchangeTables(tableA: string, tableB: string) {
+      if (!VALID_IDENTIFIER.test(tableA)) {
+        throw new Error(`Invalid table name: "${tableA}"`);
+      }
+      if (!VALID_IDENTIFIER.test(tableB)) {
+        throw new Error(`Invalid table name: "${tableB}"`);
+      }
       return {
         compile(): CompiledQuery {
           return { sql: `EXCHANGE TABLES ${tableA} AND ${tableB}`, params: {} };

@@ -20,6 +20,7 @@ import { Expression } from './expressions.js';
 import { Param } from './param.js';
 import {
   type WhereClause,
+  buildWhereClause,
   createCompileContext,
   renderWhereClause,
   VALID_IDENTIFIER,
@@ -75,6 +76,18 @@ export class DeleteBuilder<
     return this;
   }
 
+  whereIf(
+    condition: unknown,
+    column: ColumnName<DB, T> | Expression | string,
+    op: WhereOp,
+    value?: Param | Expression | [Param | Expression, Param | Expression],
+  ): this {
+    if (condition) {
+      this._wheres.push(buildWhereClause(column, op, value));
+    }
+    return this;
+  }
+
   compile(): CompiledQuery {
     if (this._wheres.length === 0) {
       throw new Error('DELETE requires at least one WHERE condition');
@@ -90,23 +103,3 @@ export class DeleteBuilder<
   }
 }
 
-function buildWhereClause(
-  columnOrCondition: Expression | string,
-  op?: WhereOp,
-  value?: Param | Expression | [Param | Expression, Param | Expression],
-): WhereClause {
-  if (columnOrCondition instanceof Expression && op === undefined) {
-    return { kind: 'expression', expr: columnOrCondition };
-  }
-  const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
-  if (op === 'IS NULL' || op === 'IS NOT NULL') {
-    return { kind: 'unary', column: col, op };
-  }
-  if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
-    if (!Array.isArray(value) || value.length < 2) {
-      throw new Error(`${op} requires a [low, high] tuple`);
-    }
-    return { kind: 'between', column: col, op, low: value[0]!, high: value[1]! };
-  }
-  return { kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression };
-}

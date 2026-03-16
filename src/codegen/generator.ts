@@ -12,7 +12,6 @@ import { type TypeMapperOptions, mapClickHouseType, isAggregateFunctionType } fr
 
 export interface GeneratorOptions extends TypeMapperOptions {
   database: string;
-  command?: string;
 }
 
 /** Valid JS identifier pattern — names that don't match need quoting. */
@@ -20,15 +19,16 @@ const VALID_IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
 /** Quote a property name if it's not a valid JS identifier. */
 function quoteProperty(name: string): string {
-  return VALID_IDENTIFIER.test(name) ? name : `"${name}"`;
+  return VALID_IDENTIFIER.test(name) ? name : JSON.stringify(name);
 }
 
 /** Convert snake_case to PascalCase, preserving casing within segments. */
 function snakeToPascal(s: string): string {
-  return s
+  const result = s
     .split('_')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join('');
+  return /^\d/.test(result) ? `_${result}` : result;
 }
 
 function rowName(tableName: string): string {

@@ -177,7 +177,7 @@ export function parseSourceTable(asSelect: string): string | null {
   if (!asSelect) return null;
   const match = asSelect.match(/\bFROM\s+([\s\S]+?)(?:\s+(?:WHERE|GROUP|ORDER|LIMIT|HAVING|PREWHERE|UNION|INTERSECT|EXCEPT|SETTINGS|FORMAT|INTO|;)|$)/i);
   if (!match) return null;
-  const raw = match[1]!.trim().replace(/`/g, '');
+  const raw = match[1]!.trim().replace(/[`"]/g, '');
   const parts = raw.split('.');
   return parts[parts.length - 1]!;
 }

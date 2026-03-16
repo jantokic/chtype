@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { fn } from '../expressions.js';
+import { fn, or, and, Expression } from '../expressions.js';
 import { Param } from '../param.js';
 
 describe('fn — function helpers', () => {
@@ -434,6 +434,34 @@ describe('fn — function helpers', () => {
       for (const unit of units) {
         expect(fn.interval(1, unit).sql).toBe(`INTERVAL 1 ${unit}`);
       }
+    });
+  });
+
+  describe('ConditionGroup param propagation', () => {
+    it('collects params from plain Expression passed as condition', () => {
+      const p = new Param('n', 'UInt32');
+      const expr = fn.raw('col > now() - INTERVAL ', p, ' HOUR');
+      const group = or(expr);
+      expect(group.params).toHaveLength(1);
+      expect(group.params[0]!.name).toBe('n');
+    });
+
+    it('collects params from Expression value in condition tuple', () => {
+      const p = new Param('n', 'UInt32');
+      const expr = fn.raw('now() - INTERVAL ', p, ' DAY');
+      const group = or(['col', '>', expr]);
+      expect(group.params).toHaveLength(1);
+      expect(group.params[0]!.name).toBe('n');
+    });
+
+    it('collects params from multiple Expression conditions', () => {
+      const p1 = new Param('a', 'UInt32');
+      const p2 = new Param('b', 'String');
+      const expr1 = fn.raw('x > ', p1);
+      const expr2 = fn.raw('y = ', p2);
+      const group = and(expr1, expr2);
+      expect(group.params).toHaveLength(2);
+      expect(group.params.map((p) => p.name)).toEqual(['a', 'b']);
     });
   });
 });
