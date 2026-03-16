@@ -1,0 +1,32 @@
+name: Feature Request
+description: Suggest a new feature for chtype
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that chtype doesn't support?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like the API to look?
+      render: typescript
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Query builder
+        - Codegen
+        - Client
+        - Migrations
+        - CLI
+        - Other
+    validations:
+      required: true

@@ -21,7 +21,8 @@
 <p align="center">
   <a href="https://chtype.jantokic.com">Website</a> &middot;
   <a href="https://www.npmjs.com/package/@jantokic/chtype">npm</a> &middot;
-  <a href="https://github.com/jantokic/chtype/issues">Issues</a>
+  <a href="https://github.com/jantokic/chtype/issues">Issues</a> &middot;
+  <a href="https://github.com/jantokic/chtype/blob/main/CONTRIBUTING.md">Contributing</a>
 </p>
 
 ---
@@ -38,13 +39,14 @@ bun add @jantokic/chtype
 
 ClickHouse has no mature ORM for TypeScript. The official `@clickhouse/client` is excellent but gives you raw SQL strings — typos in column names only fail at runtime, result types are manually maintained, and schema drift silently breaks your code.
 
-chtype fixes this with three subpath imports:
+chtype fixes this with four subpath imports:
 
 | Import | What it does |
 |---|---|
-| `chtype/codegen` | Introspects your ClickHouse DB and generates TypeScript interfaces |
-| `chtype/query` | Type-safe query builder with ClickHouse-specific functions (argMax, FINAL, SETTINGS) |
+| `chtype/codegen` | Introspects your ClickHouse DB and generates TypeScript types |
+| `chtype/query` | Type-safe query builder with ClickHouse-specific functions |
 | `chtype/client` | Thin wrapper over `@clickhouse/client` that connects query builder to execution |
+| `chtype/migrate` | Schema snapshots, diffing, and migration SQL generation |
 
 ## Quick Start
 
@@ -70,8 +72,11 @@ This produces a file like:
 export type UsersRow = {
   user_id: string;
   name: string;
+  email: string;
+  status: "active" | "inactive" | "banned";  // Enum → union literals
   score: number | null;
   tags: string[];
+  metadata: Record<string, unknown>;          // JSON columns
   updated_at: string;
 };
 
@@ -79,9 +84,12 @@ export type UsersRow = {
 export type UsersInsert = {
   user_id: string;
   name: string;
+  email: string;
+  status: "active" | "inactive" | "banned";
   score?: number | null;
   tags?: string[];
-  updated_at?: string;
+  metadata?: Record<string, unknown>;
+  updated_at?: string;                        // has DEFAULT → optional
 };
 
 export type Database = {
@@ -90,6 +98,11 @@ export type Database = {
     insert: UsersInsert;
     engine: "ReplacingMergeTree";
     versionColumn: "updated_at";
+  };
+  daily_stats: {
+    row: DailyStatsRow;
+    engine: "MaterializedView";               // MVs included
+    source: "events";
   };
 };
 ```
@@ -133,25 +146,41 @@ const latest = qb
   .groupBy('user_id')
   .compile();
 
-// FINAL modifier (for debug/audit only)
-const withFinal = qb
-  .selectFrom('users')
+// FINAL modifier
+qb.selectFrom('users')
   .select(['user_id', 'name'])
   .final()
   .compile();
 
 // SETTINGS clause
-const withSettings = qb
-  .selectFrom('users')
+qb.selectFrom('users')
   .select(['user_id'])
   .settings({ max_execution_time: 30 })
   .compile();
 
-// Type-safe inserts — MATERIALIZED columns excluded, DEFAULT columns optional
-await ch.insert('users', [
-  { user_id: '123', name: 'Alice' },
-  { user_id: '456', name: 'Bob', score: 42 },
-]);
+// PREWHERE — ClickHouse disk-level filter optimization
+qb.selectFrom('events')
+  .select(['event_type', fn.count()])
+  .prewhere('date', '>=', qb.param('since', 'Date'))
+  .groupBy('event_type')
+  .compile();
+
+// GLOBAL IN — for distributed tables
+qb.selectFrom('events')
+  .where('user_id', 'GLOBAL IN', qb.subquery(activeUsers))
+  .compile();
+
+// groupByTimeInterval — analytics convenience
+qb.selectFrom('events')
+  .select(['event_type', fn.count()])
+  .groupByTimeInterval('timestamp', 'hour')
+  .compile();
+
+// AggregatingMergeTree — -State/-Merge combinators
+qb.selectFrom('metrics_agg')
+  .select(['user_id', fn.sumMerge('amount_sum').as('total')])
+  .groupBy(['user_id'])
+  .compile();
 ```
 
 ### 4. All values are parameterized
@@ -165,6 +194,16 @@ qb.selectFrom('users')
 
 // Raw strings in WHERE are a type error — won't compile
 ```
+
+### 5. Schema diff
+
+Compare your live database against the last generated types:
+
+```bash
+npx chtype diff --config chtype.config.ts
+```
+
+Returns exit code 1 if changes are detected — useful for CI pipelines.
 
 ## Config File
 
@@ -181,7 +220,7 @@ export default defineConfig({
     password: process.env.CLICKHOUSE_PASSWORD,
   },
   output: './src/generated/schema.ts',
-  bigints: true,  // set to true to map UInt64/Int64 to bigint instead of string
+  bigints: true,
   include: ['users', 'events', 'market_*'],
   exclude: [],
 });
@@ -191,6 +230,8 @@ Then run:
 
 ```bash
 npx chtype generate --config chtype.config.ts
+# or watch for schema changes
+npx chtype generate --config chtype.config.ts --watch
 ```
 
 ## How It Compares
@@ -198,18 +239,30 @@ npx chtype generate --config chtype.config.ts
 | Feature | chtype | Raw @clickhouse/client | Kysely + CH dialect | hypequery |
 |---|---|---|---|---|
 | Column autocomplete | Yes | No | Yes (limited) | Yes |
-| Schema drift detection | Yes (codegen) | No | No | Yes (codegen) |
-| argMax / FINAL / SETTINGS | Yes | Manual SQL | No | No |
-| Insert type validation | Yes (Row vs Insert) | No | No | No |
-| Engine metadata in types | Yes | No | No | Partial |
+| Schema codegen | Yes | No | No | Yes |
+| Schema diff CLI | Yes | No | No | No |
+| Materialized view codegen | Yes | No | No | No |
+| Enum → union literals | Yes | No | No | No |
+| JSON type support | Yes | No | No | No |
+| Row vs Insert types | Yes | No | No | No |
+| argMax / FINAL / PREWHERE | Yes | Manual SQL | No | No |
+| SETTINGS / SAMPLE | Yes | Manual SQL | No | Partial |
+| GLOBAL IN | Yes | Manual SQL | No | Yes |
+| AggregateFunction typing | Yes | No | No | No |
+| -State/-Merge combinators | Yes | No | No | No |
+| Engine metadata in types | Yes | No | No | No |
 | Zero runtime overhead | Yes | N/A | Yes | No (framework) |
-| SQL injection prevention | By design | Manual | By design | By design |
+| SQL injection prevention | By design | Manual | By design | Partial |
 
 ## Requirements
 
 - **Node.js** >= 20 (or Bun)
 - **TypeScript** >= 5.0
 - **ClickHouse** server (any recent version)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions and guidelines.
 
 ## License
 
