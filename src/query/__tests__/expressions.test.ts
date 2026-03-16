@@ -343,4 +343,97 @@ describe('fn — function helpers', () => {
       expect(expr.params).toHaveLength(1);
     });
   });
+
+  describe('argMaxIf / argMinIf', () => {
+    it('argMaxIf with single version column', () => {
+      const condition = fn.raw('captured_at BETWEEN now() - INTERVAL 10 MINUTE AND now()');
+      const expr = fn.argMaxIf('volume', 'captured_at', condition);
+      expect(expr.sql).toBe(
+        'argMaxIf(volume, captured_at, captured_at BETWEEN now() - INTERVAL 10 MINUTE AND now())',
+      );
+    });
+
+    it('argMinIf with single version column', () => {
+      const condition = fn.raw('active = 1');
+      const expr = fn.argMinIf('price', 'updated_at', condition);
+      expect(expr.sql).toBe('argMinIf(price, updated_at, active = 1)');
+    });
+
+    it('argMaxIf with tuple version columns', () => {
+      const condition = fn.raw('status = 1');
+      const expr = fn.argMaxIf('name', ['vid', 'updated_at'], condition);
+      expect(expr.sql).toBe('argMaxIf(name, (vid, updated_at), status = 1)');
+    });
+
+    it('argMaxIf with alias', () => {
+      const condition = fn.raw('active = 1');
+      expect(fn.argMaxIf('volume', 'ts', condition).as('vol').toString())
+        .toBe('argMaxIf(volume, ts, active = 1) AS vol');
+    });
+
+    it('argMaxIf propagates params from condition Expression', () => {
+      const p = new Param('n', 'UInt32');
+      const condition = fn.raw('captured_at > now() - INTERVAL ', p, ' MINUTE');
+      const expr = fn.argMaxIf('volume', 'captured_at', condition);
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('n');
+      expect(expr.sql).toBe('argMaxIf(volume, captured_at, captured_at > now() - INTERVAL {n:UInt32} MINUTE)');
+    });
+  });
+
+  describe('interval / ago / sub / add', () => {
+    it('fn.interval()', () => {
+      expect(fn.interval(5, 'MINUTE').sql).toBe('INTERVAL 5 MINUTE');
+    });
+
+    it('fn.interval with alias', () => {
+      expect(fn.interval(1, 'HOUR').as('offset').toString()).toBe('INTERVAL 1 HOUR AS offset');
+    });
+
+    it('fn.ago()', () => {
+      expect(fn.ago(5, 'MINUTE').sql).toBe('now() - INTERVAL 5 MINUTE');
+    });
+
+    it('fn.ago with DAY', () => {
+      expect(fn.ago(7, 'DAY').sql).toBe('now() - INTERVAL 7 DAY');
+    });
+
+    it('fn.sub()', () => {
+      const expr = fn.sub(fn.now(), fn.interval(5, 'MINUTE'));
+      expect(expr.sql).toBe('(now()) - (INTERVAL 5 MINUTE)');
+    });
+
+    it('fn.add()', () => {
+      const expr = fn.add(fn.now(), fn.interval(1, 'HOUR'));
+      expect(expr.sql).toBe('(now()) + (INTERVAL 1 HOUR)');
+    });
+
+    it('fn.sub propagates params', () => {
+      const p = new Param('n', 'UInt32');
+      const left = fn.raw('col_a + ', p);
+      const right = fn.now();
+      const expr = fn.sub(left, right);
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('n');
+    });
+
+    it('fn.add propagates params from both sides', () => {
+      const p1 = new Param('a', 'UInt32');
+      const p2 = new Param('b', 'UInt32');
+      const expr = fn.add(fn.raw('x + ', p1), fn.raw('y + ', p2));
+      expect(expr.params).toHaveLength(2);
+    });
+
+    it('fn.sub composes with fn.now and fn.interval', () => {
+      const expr = fn.sub(fn.now(), fn.interval(10, 'SECOND'));
+      expect(expr.sql).toBe('(now()) - (INTERVAL 10 SECOND)');
+    });
+
+    it('supports all interval units', () => {
+      const units = ['SECOND', 'MINUTE', 'HOUR', 'DAY', 'WEEK', 'MONTH', 'YEAR'] as const;
+      for (const unit of units) {
+        expect(fn.interval(1, unit).sql).toBe(`INTERVAL 1 ${unit}`);
+      }
+    });
+  });
 });
