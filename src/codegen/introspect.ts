@@ -5,6 +5,7 @@
  * of the database schema, including engine metadata and column flags.
  */
 
+import { createHash } from 'node:crypto';
 import type { ClickHouseClient } from '@clickhouse/client';
 
 export interface IntrospectedColumn {
@@ -161,6 +162,22 @@ export function parseVersionColumn(engine: string, engineFull: string): string |
   if (lastArg.startsWith("'") || lastArg.startsWith('"')) return null;
 
   return lastArg;
+}
+
+export function schemaHash(tables: IntrospectedTable[]): string {
+  const h = createHash('sha256');
+  for (const t of tables) {
+    h.update(t.name);
+    h.update(t.engine);
+    h.update(t.engineFull);
+    for (const c of t.columns) {
+      h.update(c.name);
+      h.update(c.type);
+      h.update(c.defaultKind);
+      h.update(c.defaultExpression);
+    }
+  }
+  return h.digest('hex');
 }
 
 /** Match table names against glob-like patterns (supports * wildcard). */

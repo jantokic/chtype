@@ -88,7 +88,7 @@ export function mapClickHouseType(chType: string, options: TypeMapperOptions = {
   }
 
   if (t.startsWith('Enum8(') || t.startsWith('Enum16(')) {
-    return 'string';
+    return parseEnumLiterals(t);
   }
 
   const aggMatch = t.match(/^(?:SimpleAggregateFunction|AggregateFunction)\(.+?,\s*(.+)\)$/);
@@ -122,6 +122,24 @@ export function findTopLevelComma(s: string): number {
     else if (s[i] === ',' && depth === 0) return i;
   }
   return -1;
+}
+
+function parseEnumLiterals(t: string): string {
+  const inner = t.slice(t.indexOf('(') + 1, t.lastIndexOf(')'));
+  const values: string[] = [];
+  const re = /'([^']*(?:''[^']*)*)'/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(inner)) !== null) {
+    values.push(m[1]!.replace(/''/g, "'"));
+    // skip past the " = N" part to avoid matching numbers
+    const eq = inner.indexOf('=', re.lastIndex);
+    if (eq !== -1) {
+      const comma = inner.indexOf(',', eq);
+      re.lastIndex = comma !== -1 ? comma + 1 : inner.length;
+    }
+  }
+  if (values.length === 0) return 'string';
+  return values.map((v) => `'${v}'`).join(' | ');
 }
 
 /** Split a string by top-level commas (not inside parentheses). */

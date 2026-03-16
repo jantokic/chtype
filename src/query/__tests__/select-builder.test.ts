@@ -141,6 +141,45 @@ describe('SelectBuilder', () => {
         .compile();
       expect(sql).toContain('WHERE user_id IN {ids:Array(String)} AND score > {minScore:Float64}');
     });
+
+    it('builds WHERE GLOBAL IN with Array param', () => {
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .where('user_id', 'GLOBAL IN', qb.param('ids', 'Array(String)'))
+        .compile();
+      expect(sql).toContain('WHERE user_id GLOBAL IN {ids:Array(String)}');
+      expect(params).toHaveProperty('ids');
+    });
+
+    it('builds WHERE GLOBAL NOT IN', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('user_id', 'GLOBAL NOT IN', qb.param('excludeIds', 'Array(String)'))
+        .compile();
+      expect(sql).toContain('WHERE user_id GLOBAL NOT IN {excludeIds:Array(String)}');
+    });
+
+    it('builds WHERE GLOBAL IN with subquery', () => {
+      const inner = qb.selectFrom('events').select(['event_id']);
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .where('user_id', 'GLOBAL IN', qb.subquery(inner))
+        .compile();
+      expect(sql).toContain('WHERE user_id GLOBAL IN (SELECT event_id\nFROM events)');
+    });
+
+    it('builds WHERE GLOBAL NOT IN with subquery', () => {
+      const inner = qb.selectFrom('events').select(['event_id']);
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('user_id', 'GLOBAL NOT IN', qb.subquery(inner))
+        .compile();
+      expect(sql).toContain('WHERE user_id GLOBAL NOT IN (SELECT event_id\nFROM events)');
+    });
   });
 
   describe('JOIN', () => {
@@ -790,6 +829,78 @@ describe('SelectBuilder', () => {
         .selectFrom('all_users')
         .compile();
       expect(sql).toContain('SELECT *\nFROM all_users');
+    });
+  });
+
+  describe('groupByTimeInterval', () => {
+    it('adds toStartOfHour and groups by it', () => {
+      const { sql } = qb
+        .selectFrom('events')
+        .select(['type', fn.count()])
+        .groupByTimeInterval('timestamp', 'hour')
+        .compile();
+      expect(sql).toContain('toStartOfHour(timestamp)');
+      expect(sql).toContain('GROUP BY toStartOfHour(timestamp)');
+    });
+
+    it('supports minute interval', () => {
+      const { sql } = qb
+        .selectFrom('events')
+        .select(['type'])
+        .groupByTimeInterval('timestamp', 'minute')
+        .compile();
+      expect(sql).toContain('toStartOfMinute(timestamp)');
+      expect(sql).toContain('GROUP BY toStartOfMinute(timestamp)');
+    });
+
+    it('supports day interval', () => {
+      const { sql } = qb
+        .selectFrom('events')
+        .select(['type'])
+        .groupByTimeInterval('timestamp', 'day')
+        .compile();
+      expect(sql).toContain('toStartOfDay(timestamp)');
+      expect(sql).toContain('GROUP BY toStartOfDay(timestamp)');
+    });
+
+    it('supports week interval', () => {
+      const { sql } = qb
+        .selectFrom('events')
+        .select(['type'])
+        .groupByTimeInterval('timestamp', 'week')
+        .compile();
+      expect(sql).toContain('toStartOfWeek(timestamp)');
+      expect(sql).toContain('GROUP BY toStartOfWeek(timestamp)');
+    });
+
+    it('supports month interval', () => {
+      const { sql } = qb
+        .selectFrom('events')
+        .select(['type'])
+        .groupByTimeInterval('timestamp', 'month')
+        .compile();
+      expect(sql).toContain('toStartOfMonth(timestamp)');
+      expect(sql).toContain('GROUP BY toStartOfMonth(timestamp)');
+    });
+
+    it('supports year interval', () => {
+      const { sql } = qb
+        .selectFrom('events')
+        .select(['type'])
+        .groupByTimeInterval('timestamp', 'year')
+        .compile();
+      expect(sql).toContain('toStartOfYear(timestamp)');
+      expect(sql).toContain('GROUP BY toStartOfYear(timestamp)');
+    });
+
+    it('combines with explicit groupBy columns', () => {
+      const { sql } = qb
+        .selectFrom('events')
+        .select(['type', fn.count()])
+        .groupByTimeInterval('timestamp', 'hour')
+        .groupBy('type')
+        .compile();
+      expect(sql).toContain('GROUP BY toStartOfHour(timestamp), type');
     });
   });
 

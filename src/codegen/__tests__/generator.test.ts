@@ -99,6 +99,19 @@ describe('generate', () => {
     expect(bigintOutput).toContain('export type CountersInsert = {\n  count: number | bigint;\n}');
   });
 
+  it('generates union literals for Enum columns', () => {
+    const table: IntrospectedTable = {
+      ...sampleTable,
+      name: 'accounts',
+      columns: [
+        { name: 'id', type: 'String', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: true, isInPrimaryKey: true, isInPartitionKey: false },
+        { name: 'status', type: "Enum8('active' = 1, 'inactive' = 2, 'banned' = 3)", defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+      ],
+    };
+    const output = generate([table], { database: 'test_db' });
+    expect(output).toContain("status: 'active' | 'inactive' | 'banned';");
+  });
+
   it('applies insertCoerce to Insert but not Row', () => {
     const table: IntrospectedTable = {
       ...sampleTable,

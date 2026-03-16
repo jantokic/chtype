@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { parseVersionColumn, matchesPattern, filterTables } from '../introspect.js';
+import { parseVersionColumn, matchesPattern, filterTables, schemaHash } from '../introspect.js';
+import type { IntrospectedTable } from '../introspect.js';
 
 describe('parseVersionColumn', () => {
   it('returns null for MergeTree', () => {
@@ -43,6 +44,51 @@ describe('matchesPattern', () => {
   });
   it('matches dot patterns', () => {
     expect(matchesPattern('.inner.table', '.inner.*')).toBe(true);
+  });
+});
+
+describe('schemaHash', () => {
+  const makeTable = (name: string, columns: { name: string; type: string }[]): IntrospectedTable => ({
+    name,
+    engine: 'MergeTree',
+    engineFull: 'MergeTree',
+    versionColumn: null,
+    sortingKey: '',
+    partitionKey: '',
+    primaryKey: '',
+    comment: '',
+    columns: columns.map((c) => ({
+      ...c,
+      defaultKind: '' as const,
+      defaultExpression: '',
+      comment: '',
+      isInSortingKey: false,
+      isInPrimaryKey: false,
+      isInPartitionKey: false,
+    })),
+  });
+
+  it('returns deterministic hash', () => {
+    const tables = [makeTable('users', [{ name: 'id', type: 'String' }])];
+    expect(schemaHash(tables)).toBe(schemaHash(tables));
+  });
+
+  it('changes when column type changes', () => {
+    const a = [makeTable('users', [{ name: 'id', type: 'String' }])];
+    const b = [makeTable('users', [{ name: 'id', type: 'UInt64' }])];
+    expect(schemaHash(a)).not.toBe(schemaHash(b));
+  });
+
+  it('changes when a column is added', () => {
+    const a = [makeTable('users', [{ name: 'id', type: 'String' }])];
+    const b = [makeTable('users', [{ name: 'id', type: 'String' }, { name: 'name', type: 'String' }])];
+    expect(schemaHash(a)).not.toBe(schemaHash(b));
+  });
+
+  it('changes when table name changes', () => {
+    const a = [makeTable('users', [{ name: 'id', type: 'String' }])];
+    const b = [makeTable('accounts', [{ name: 'id', type: 'String' }])];
+    expect(schemaHash(a)).not.toBe(schemaHash(b));
   });
 });
 

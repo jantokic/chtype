@@ -36,7 +36,7 @@ export type SortDirection = 'ASC' | 'DESC';
 export type ComparisonOp = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'LIKE' | 'NOT LIKE' | 'ILIKE' | 'NOT ILIKE';
 
 /** Set membership operators — require Array(...) param types. */
-export type SetOp = 'IN' | 'NOT IN';
+export type SetOp = 'IN' | 'NOT IN' | 'GLOBAL IN' | 'GLOBAL NOT IN';
 
 /** Unary operators (no value argument). */
 export type UnaryOp = 'IS NULL' | 'IS NOT NULL';

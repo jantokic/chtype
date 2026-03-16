@@ -33,6 +33,15 @@ import {
   VALID_IDENTIFIER,
 } from './compile-utils.js';
 
+const TIME_INTERVAL_FN: Record<string, string> = {
+  minute: 'toStartOfMinute',
+  hour: 'toStartOfHour',
+  day: 'toStartOfDay',
+  week: 'toStartOfWeek',
+  month: 'toStartOfMonth',
+  year: 'toStartOfYear',
+};
+
 interface JoinClause {
   type: JoinType;
   table: string;
@@ -233,6 +242,17 @@ export class SelectBuilder<
 
   groupBy(...columns: (ColumnName<DB, T> | Expression | string)[]): this {
     this._groupBy.push(...columns.map((c) => (c instanceof Expression ? c.sql : c)));
+    return this;
+  }
+
+  groupByTimeInterval(
+    column: ColumnName<DB, T> | string,
+    interval: 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year',
+  ): this {
+    const fnName = TIME_INTERVAL_FN[interval];
+    const expr = `${fnName}(${column})`;
+    this._columns.push(new Expression(expr));
+    this._groupBy.push(expr);
     return this;
   }
 

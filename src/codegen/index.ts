@@ -5,6 +5,7 @@ export {
   parseVersionColumn,
   matchesPattern,
   filterTables,
+  schemaHash,
   type IntrospectedColumn,
   type IntrospectedTable,
   type IntrospectOptions,
