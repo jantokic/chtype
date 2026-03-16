@@ -34,6 +34,12 @@ export interface QueryBuilder<DB extends DatabaseSchema> {
     name: N,
     builder: B,
   ): WithBuilder<DB & Record<N, CteSchema<InferResult<B>>>>;
+  /** INSERT INTO target SELECT ... — atomic insert-from-select. */
+  insertFrom(table: string, selectQuery: { compile(): CompiledQuery<unknown> }): { compile(): CompiledQuery };
+  /** TRUNCATE TABLE statement. */
+  truncate(table: string): { compile(): CompiledQuery };
+  /** EXCHANGE TABLES a AND b (atomic table swap). */
+  exchangeTables(tableA: string, tableB: string): { compile(): CompiledQuery };
   fn: typeof fn;
 }
 
@@ -90,6 +96,28 @@ export function createQueryBuilder<DB extends DatabaseSchema>(): QueryBuilder<DB
       builder: Subquery | { compile(): CompiledQuery<unknown> },
     ) {
       return createWithBuilder(name, builder, []);
+    },
+    insertFrom(table: string, selectQuery: { compile(): CompiledQuery<unknown> }) {
+      return {
+        compile(): CompiledQuery {
+          const compiled = selectQuery.compile();
+          return { sql: `INSERT INTO ${table}\n${compiled.sql}`, params: compiled.params };
+        },
+      };
+    },
+    truncate(table: string) {
+      return {
+        compile(): CompiledQuery {
+          return { sql: `TRUNCATE TABLE ${table}`, params: {} };
+        },
+      };
+    },
+    exchangeTables(tableA: string, tableB: string) {
+      return {
+        compile(): CompiledQuery {
+          return { sql: `EXCHANGE TABLES ${tableA} AND ${tableB}`, params: {} };
+        },
+      };
     },
     fn,
   };

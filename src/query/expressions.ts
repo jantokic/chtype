@@ -284,6 +284,14 @@ export const fn = {
   avgIf(column: string, condition: string): Expression {
     return new Expression(`avgIf(${column}, ${condition})`);
   },
+  argMaxIf(column: string, versionColumn: string | string[], condition: Expression): Expression {
+    const ver = Array.isArray(versionColumn) ? `(${versionColumn.join(', ')})` : versionColumn;
+    return new Expression(`argMaxIf(${column}, ${ver}, ${condition.sql})`, undefined, [...condition.params]);
+  },
+  argMinIf(column: string, versionColumn: string | string[], condition: Expression): Expression {
+    const ver = Array.isArray(versionColumn) ? `(${versionColumn.join(', ')})` : versionColumn;
+    return new Expression(`argMinIf(${column}, ${ver}, ${condition.sql})`, undefined, [...condition.params]);
+  },
 
   // --- Aggregate -State combinators (for writing to AggregatingMergeTree) ---
 
@@ -337,6 +345,21 @@ export const fn = {
   },
   quantileMerge(level: number, column: string): Expression {
     return new Expression(`quantileMerge(${level})(${column})`);
+  },
+
+  // --- Arithmetic / interval helpers ---
+
+  interval(n: number, unit: 'SECOND' | 'MINUTE' | 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'): Expression {
+    return new Expression(`INTERVAL ${n} ${unit}`);
+  },
+  ago(n: number, unit: 'SECOND' | 'MINUTE' | 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'): Expression {
+    return new Expression(`now() - INTERVAL ${n} ${unit}`);
+  },
+  sub(left: Expression, right: Expression): Expression {
+    return new Expression(`(${left.sql}) - (${right.sql})`, undefined, [...left.params, ...right.params]);
+  },
+  add(left: Expression, right: Expression): Expression {
+    return new Expression(`(${left.sql}) + (${right.sql})`, undefined, [...left.params, ...right.params]);
   },
 
   /** Raw SQL expression — escape hatch for anything not covered.

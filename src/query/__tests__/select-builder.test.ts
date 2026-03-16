@@ -334,7 +334,17 @@ describe('SelectBuilder', () => {
     });
   });
 
-  describe('NOT LIKE / ILIKE', () => {
+  describe('LIKE / NOT LIKE / ILIKE', () => {
+    it('builds WHERE LIKE with Param', () => {
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('name', 'LIKE', qb.param('pattern', 'String'))
+        .compile();
+      expect(sql).toContain('WHERE name LIKE {pattern:String}');
+      expect(params).toHaveProperty('pattern');
+    });
+
     it('builds WHERE NOT LIKE', () => {
       const { sql } = qb
         .selectFrom('users')
@@ -962,6 +972,47 @@ describe('SelectBuilder', () => {
         .compile();
       expect(sql).toContain('WHERE name != {name:String} AND score > {min:Float64}');
       expect(sql).not.toContain('max');
+    });
+  });
+
+  describe('INSERT ... SELECT', () => {
+    it('builds INSERT INTO with SELECT', () => {
+      const select = qb
+        .selectFrom('users')
+        .select(['user_id', fn.argMax('name', 'updated_at').as('name')])
+        .groupBy('user_id');
+      const { sql, params } = qb.insertFrom('users_latest', select).compile();
+      expect(sql).toBe(
+        'INSERT INTO users_latest\nSELECT user_id, argMax(name, updated_at) AS name\nFROM users\nGROUP BY user_id',
+      );
+      expect(params).toEqual({});
+    });
+
+    it('merges params from the inner SELECT', () => {
+      const select = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .where('score', '>', qb.param('min', 'Float64'));
+      const { sql, params } = qb.insertFrom('users_filtered', select).compile();
+      expect(sql).toContain('INSERT INTO users_filtered');
+      expect(sql).toContain('WHERE score > {min:Float64}');
+      expect(params).toHaveProperty('min');
+    });
+  });
+
+  describe('TRUNCATE', () => {
+    it('builds TRUNCATE TABLE', () => {
+      const { sql, params } = qb.truncate('users_staging').compile();
+      expect(sql).toBe('TRUNCATE TABLE users_staging');
+      expect(params).toEqual({});
+    });
+  });
+
+  describe('EXCHANGE TABLES', () => {
+    it('builds EXCHANGE TABLES ... AND ...', () => {
+      const { sql, params } = qb.exchangeTables('users_latest', 'users_latest_next').compile();
+      expect(sql).toBe('EXCHANGE TABLES users_latest AND users_latest_next');
+      expect(params).toEqual({});
     });
   });
 });
