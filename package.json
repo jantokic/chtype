@@ -1,6 +1,6 @@
 {
   "name": "@jantokic/chtype",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Type-safe ClickHouse toolkit for TypeScript — schema codegen, query builder, and enhanced client",
   "type": "module",
   "main": "./dist/index.js",
@@ -45,7 +45,11 @@
     "@types/bun": "^1.2.0",
     "typescript": "^5.7.0"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "license": "MIT",
   "keywords": [
     "clickhouse",
@@ -61,7 +65,7 @@
     "type": "git",
     "url": "https://github.com/jantokic/chtype.git"
   },
-  "homepage": "https://github.com/jantokic/chtype",
+  "homepage": "https://chtype.jantokic.com",
   "author": "Jan Tokic",
   "engines": {
     "node": ">=20.0.0"
