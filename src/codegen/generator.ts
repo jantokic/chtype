@@ -8,7 +8,7 @@
  */
 
 import type { IntrospectedColumn, IntrospectedTable } from './introspect.js';
-import { type TypeMapperOptions, mapClickHouseType } from './type-mapper.js';
+import { type TypeMapperOptions, mapClickHouseType, isAggregateFunctionType } from './type-mapper.js';
 
 export interface GeneratorOptions extends TypeMapperOptions {
   database: string;
@@ -114,6 +114,13 @@ export function generate(tables: IntrospectedTable[], options: GeneratorOptions)
   ].join('\n');
 
   const sections: string[] = [header];
+
+  const hasAggregateFunction = tables.some((table) =>
+    table.columns.some((col) => isAggregateFunctionType(col.type)),
+  );
+  if (hasAggregateFunction) {
+    sections.push('type AggregateState<Fn extends string, T> = T & { readonly __aggregateFn: Fn };');
+  }
 
   for (const table of tables) {
     sections.push(generateRowInterface(table, options));

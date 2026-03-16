@@ -285,6 +285,60 @@ export const fn = {
     return new Expression(`avgIf(${column}, ${condition})`);
   },
 
+  // --- Aggregate -State combinators (for writing to AggregatingMergeTree) ---
+
+  sumState(column: string): Expression {
+    return new Expression(`sumState(${column})`);
+  },
+  countState(column?: string): Expression {
+    return new Expression(column ? `countState(${column})` : 'countState()');
+  },
+  avgState(column: string): Expression {
+    return new Expression(`avgState(${column})`);
+  },
+  minState(column: string): Expression {
+    return new Expression(`minState(${column})`);
+  },
+  maxState(column: string): Expression {
+    return new Expression(`maxState(${column})`);
+  },
+  uniqState(column: string): Expression {
+    return new Expression(`uniqState(${column})`);
+  },
+  anyState(column: string): Expression {
+    return new Expression(`anyState(${column})`);
+  },
+  quantileState(level: number, column: string): Expression {
+    return new Expression(`quantileState(${level})(${column})`);
+  },
+
+  // --- Aggregate -Merge combinators (for reading from AggregatingMergeTree) ---
+
+  sumMerge(column: string): Expression {
+    return new Expression(`sumMerge(${column})`);
+  },
+  countMerge(column: string): Expression {
+    return new Expression(`countMerge(${column})`);
+  },
+  avgMerge(column: string): Expression {
+    return new Expression(`avgMerge(${column})`);
+  },
+  minMerge(column: string): Expression {
+    return new Expression(`minMerge(${column})`);
+  },
+  maxMerge(column: string): Expression {
+    return new Expression(`maxMerge(${column})`);
+  },
+  uniqMerge(column: string): Expression {
+    return new Expression(`uniqMerge(${column})`);
+  },
+  anyMerge(column: string): Expression {
+    return new Expression(`anyMerge(${column})`);
+  },
+  quantileMerge(level: number, column: string): Expression {
+    return new Expression(`quantileMerge(${level})(${column})`);
+  },
+
   /** Raw SQL expression — escape hatch for anything not covered.
    *  Accepts variadic args to interpolate Params: fn.raw('INTERVAL ', param, ' HOUR')
    */

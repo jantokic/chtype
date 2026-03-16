@@ -227,6 +227,69 @@ describe('fn — function helpers', () => {
     });
   });
 
+  describe('-State combinators', () => {
+    it('sumState', () => {
+      expect(fn.sumState('amount').sql).toBe('sumState(amount)');
+    });
+    it('countState without column', () => {
+      expect(fn.countState().sql).toBe('countState()');
+    });
+    it('countState with column', () => {
+      expect(fn.countState('user_id').sql).toBe('countState(user_id)');
+    });
+    it('avgState', () => {
+      expect(fn.avgState('amount').sql).toBe('avgState(amount)');
+    });
+    it('minState', () => {
+      expect(fn.minState('amount').sql).toBe('minState(amount)');
+    });
+    it('maxState', () => {
+      expect(fn.maxState('amount').sql).toBe('maxState(amount)');
+    });
+    it('uniqState', () => {
+      expect(fn.uniqState('user_id').sql).toBe('uniqState(user_id)');
+    });
+    it('anyState', () => {
+      expect(fn.anyState('col').sql).toBe('anyState(col)');
+    });
+    it('quantileState', () => {
+      expect(fn.quantileState(0.95, 'latency').sql).toBe('quantileState(0.95)(latency)');
+    });
+    it('sumState with alias', () => {
+      expect(fn.sumState('amount').as('amount_sum').toString()).toBe('sumState(amount) AS amount_sum');
+    });
+  });
+
+  describe('-Merge combinators', () => {
+    it('sumMerge', () => {
+      expect(fn.sumMerge('amount_sum').sql).toBe('sumMerge(amount_sum)');
+    });
+    it('countMerge', () => {
+      expect(fn.countMerge('event_count').sql).toBe('countMerge(event_count)');
+    });
+    it('avgMerge', () => {
+      expect(fn.avgMerge('avg_col').sql).toBe('avgMerge(avg_col)');
+    });
+    it('minMerge', () => {
+      expect(fn.minMerge('min_col').sql).toBe('minMerge(min_col)');
+    });
+    it('maxMerge', () => {
+      expect(fn.maxMerge('max_col').sql).toBe('maxMerge(max_col)');
+    });
+    it('uniqMerge', () => {
+      expect(fn.uniqMerge('uniq_col').sql).toBe('uniqMerge(uniq_col)');
+    });
+    it('anyMerge', () => {
+      expect(fn.anyMerge('any_col').sql).toBe('anyMerge(any_col)');
+    });
+    it('quantileMerge', () => {
+      expect(fn.quantileMerge(0.99, 'latency_quantile').sql).toBe('quantileMerge(0.99)(latency_quantile)');
+    });
+    it('sumMerge with alias', () => {
+      expect(fn.sumMerge('amount_sum').as('total_amount').toString()).toBe('sumMerge(amount_sum) AS total_amount');
+    });
+  });
+
   describe('Expression aliasing', () => {
     it('as() works on all function results', () => {
       const expr = fn.arrayMap('x -> x * 2', 'nums').as('doubled');

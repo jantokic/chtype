@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { mapClickHouseType } from '../type-mapper.js';
+import { mapClickHouseType, isAggregateFunctionType } from '../type-mapper.js';
 
 describe('mapClickHouseType', () => {
   describe('scalar types', () => {
@@ -104,6 +104,45 @@ describe('mapClickHouseType', () => {
     });
     it('SimpleAggregateFunction(sum, Float64) → number', () => {
       expect(mapClickHouseType('SimpleAggregateFunction(sum, Float64)')).toBe('number');
+    });
+  });
+
+  describe('AggregateFunction types', () => {
+    it('AggregateFunction(sum, UInt64) → AggregateState<"sum", string>', () => {
+      expect(mapClickHouseType('AggregateFunction(sum, UInt64)')).toBe('AggregateState<"sum", string>');
+    });
+    it('AggregateFunction(count, UInt64) → AggregateState<"count", string>', () => {
+      expect(mapClickHouseType('AggregateFunction(count, UInt64)')).toBe('AggregateState<"count", string>');
+    });
+    it('AggregateFunction(avg, Float64) → AggregateState<"avg", number>', () => {
+      expect(mapClickHouseType('AggregateFunction(avg, Float64)')).toBe('AggregateState<"avg", number>');
+    });
+    it('AggregateFunction(uniq, String) → AggregateState<"uniq", string>', () => {
+      expect(mapClickHouseType('AggregateFunction(uniq, String)')).toBe('AggregateState<"uniq", string>');
+    });
+    it('AggregateFunction with bigints option', () => {
+      expect(mapClickHouseType('AggregateFunction(sum, UInt64)', { bigints: true })).toBe('AggregateState<"sum", bigint>');
+    });
+    it('SimpleAggregateFunction still maps to plain inner type', () => {
+      expect(mapClickHouseType('SimpleAggregateFunction(sum, UInt64)')).toBe('string');
+    });
+    it('SimpleAggregateFunction(max, DateTime) → string', () => {
+      expect(mapClickHouseType('SimpleAggregateFunction(max, DateTime)')).toBe('string');
+    });
+  });
+
+  describe('isAggregateFunctionType', () => {
+    it('returns true for AggregateFunction', () => {
+      expect(isAggregateFunctionType('AggregateFunction(sum, UInt64)')).toBe(true);
+    });
+    it('returns false for SimpleAggregateFunction', () => {
+      expect(isAggregateFunctionType('SimpleAggregateFunction(sum, UInt64)')).toBe(false);
+    });
+    it('returns false for plain types', () => {
+      expect(isAggregateFunctionType('UInt64')).toBe(false);
+    });
+    it('handles whitespace', () => {
+      expect(isAggregateFunctionType('  AggregateFunction(sum, UInt64)  ')).toBe(true);
     });
   });
 

@@ -179,6 +179,81 @@ describe('generate', () => {
     expect(output).toContain('source: "events"');
   });
 
+  it('emits AggregateState utility type when AggregateFunction columns exist', () => {
+    const aggTable: IntrospectedTable = {
+      name: 'agg_stats',
+      engine: 'AggregatingMergeTree',
+      engineFull: 'AggregatingMergeTree()',
+      versionColumn: null,
+      sortingKey: 'user_id',
+      partitionKey: '',
+      primaryKey: 'user_id',
+      comment: '',
+      columns: [
+        { name: 'user_id', type: 'String', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: true, isInPrimaryKey: true, isInPartitionKey: false },
+        { name: 'amount_sum', type: 'AggregateFunction(sum, UInt64)', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+        { name: 'event_count', type: 'AggregateFunction(count, UInt64)', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+      ],
+    };
+    const output = generate([aggTable], { database: 'test_db' });
+    expect(output).toContain('type AggregateState<Fn extends string, T> = T & { readonly __aggregateFn: Fn };');
+    expect(output).toContain('amount_sum: AggregateState<"sum", string>;');
+    expect(output).toContain('event_count: AggregateState<"count", string>;');
+  });
+
+  it('does not emit AggregateState when no AggregateFunction columns exist', () => {
+    const output = generate([sampleTable], { database: 'test_db' });
+    expect(output).not.toContain('AggregateState');
+  });
+
+  it('emits AggregateState only once for multiple tables', () => {
+    const aggTable1: IntrospectedTable = {
+      name: 'agg_a',
+      engine: 'AggregatingMergeTree',
+      engineFull: 'AggregatingMergeTree()',
+      versionColumn: null,
+      sortingKey: 'id',
+      partitionKey: '',
+      primaryKey: 'id',
+      comment: '',
+      columns: [
+        { name: 'id', type: 'String', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: true, isInPrimaryKey: true, isInPartitionKey: false },
+        { name: 'val', type: 'AggregateFunction(sum, Float64)', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+      ],
+    };
+    const aggTable2: IntrospectedTable = {
+      name: 'agg_b',
+      engine: 'AggregatingMergeTree',
+      engineFull: 'AggregatingMergeTree()',
+      versionColumn: null,
+      sortingKey: 'id',
+      partitionKey: '',
+      primaryKey: 'id',
+      comment: '',
+      columns: [
+        { name: 'id', type: 'String', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: true, isInPrimaryKey: true, isInPartitionKey: false },
+        { name: 'cnt', type: 'AggregateFunction(count, UInt64)', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+      ],
+    };
+    const output = generate([aggTable1, aggTable2], { database: 'test_db' });
+    const matches = output.match(/type AggregateState</g);
+    expect(matches).toHaveLength(1);
+  });
+
+  it('SimpleAggregateFunction maps to plain type, not AggregateState', () => {
+    const table: IntrospectedTable = {
+      ...sampleTable,
+      name: 'simple_agg',
+      columns: [
+        { name: 'id', type: 'String', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: true, isInPrimaryKey: true, isInPartitionKey: false },
+        { name: 'total', type: 'SimpleAggregateFunction(sum, Float64)', defaultKind: '', defaultExpression: '', comment: '', isInSortingKey: false, isInPrimaryKey: false, isInPartitionKey: false },
+      ],
+    };
+    const output = generate([table], { database: 'test_db' });
+    expect(output).not.toContain('AggregateState');
+    expect(output).toContain('total: number;');
+  });
+
   it('applies insertCoerce to Insert but not Row', () => {
     const table: IntrospectedTable = {
       ...sampleTable,

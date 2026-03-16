@@ -91,9 +91,16 @@ export function mapClickHouseType(chType: string, options: TypeMapperOptions = {
     return parseEnumLiterals(t);
   }
 
-  const aggMatch = t.match(/^(?:SimpleAggregateFunction|AggregateFunction)\(.+?,\s*(.+)\)$/);
+  const simpleAggMatch = t.match(/^SimpleAggregateFunction\(.+?,\s*(.+)\)$/);
+  if (simpleAggMatch) {
+    return mapClickHouseType(simpleAggMatch[1]!, options);
+  }
+
+  const aggMatch = t.match(/^AggregateFunction\((\w+),\s*(.+)\)$/);
   if (aggMatch) {
-    return mapClickHouseType(aggMatch[1]!, options);
+    const fnName = aggMatch[1]!;
+    const innerType = mapClickHouseType(aggMatch[2]!, options);
+    return `AggregateState<"${fnName}", ${innerType}>`;
   }
 
   if (t === 'JSON' || t === 'Object(\'json\')') return 'Record<string, unknown>';
@@ -114,6 +121,10 @@ export function mapClickHouseType(chType: string, options: TypeMapperOptions = {
   }
 
   return SCALAR_MAP[t] ?? 'unknown';
+}
+
+export function isAggregateFunctionType(chType: string): boolean {
+  return /^AggregateFunction\(/.test(chType.replace(/\s+/g, ' ').trim());
 }
 
 /** Find the index of the first top-level comma (not inside parentheses). */

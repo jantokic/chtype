@@ -11,4 +11,4 @@ export {
   type IntrospectedTable,
   type IntrospectOptions,
 } from './introspect.js';
-export { mapClickHouseType, type TypeMapperOptions } from './type-mapper.js';
+export { mapClickHouseType, isAggregateFunctionType, type TypeMapperOptions } from './type-mapper.js';
