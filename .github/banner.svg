@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400">
+  <defs>
+    <radialGradient id="glow1" cx="50%" cy="80%" r="60%" fx="50%" fy="80%">
+      <stop offset="0%" stop-color="#FADB14" stop-opacity="0.25"/>
+      <stop offset="40%" stop-color="#D4B106" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#08080a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="50%" cy="90%" r="40%" fx="50%" fy="90%">
+      <stop offset="0%" stop-color="#FFF566" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#08080a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow3" cx="30%" cy="50%" r="35%">
+      <stop offset="0%" stop-color="#FADB14" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#08080a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="line1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FADB14" stop-opacity="0"/>
+      <stop offset="30%" stop-color="#FADB14" stop-opacity="0.12"/>
+      <stop offset="50%" stop-color="#FFF566" stop-opacity="0.25"/>
+      <stop offset="70%" stop-color="#FADB14" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#FADB14" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="line2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FADB14" stop-opacity="0"/>
+      <stop offset="20%" stop-color="#FADB14" stop-opacity="0.08"/>
+      <stop offset="50%" stop-color="#FFF566" stop-opacity="0.16"/>
+      <stop offset="80%" stop-color="#FADB14" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#FADB14" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="400" fill="#08080a"/>
+
+  <!-- Glow layers -->
+  <rect width="1200" height="400" fill="url(#glow1)"/>
+  <rect width="1200" height="400" fill="url(#glow2)"/>
+  <rect width="1200" height="400" fill="url(#glow3)"/>
+
+  <!-- Light streaks -->
+  <rect x="-60" y="310" width="1320" height="1.5" fill="url(#line1)" opacity="0.8"/>
+  <rect x="-30" y="340" width="1260" height="1" fill="url(#line2)" opacity="0.6"/>
+
+  <!-- Subtle grid dots -->
+  <g opacity="0.04" fill="#FADB14">
+    <circle cx="100" cy="100" r="1"/><circle cx="200" cy="100" r="1"/><circle cx="300" cy="100" r="1"/><circle cx="400" cy="100" r="1"/><circle cx="500" cy="100" r="1"/><circle cx="600" cy="100" r="1"/><circle cx="700" cy="100" r="1"/><circle cx="800" cy="100" r="1"/><circle cx="900" cy="100" r="1"/><circle cx="1000" cy="100" r="1"/><circle cx="1100" cy="100" r="1"/>
+    <circle cx="100" cy="200" r="1"/><circle cx="200" cy="200" r="1"/><circle cx="300" cy="200" r="1"/><circle cx="400" cy="200" r="1"/><circle cx="500" cy="200" r="1"/><circle cx="600" cy="200" r="1"/><circle cx="700" cy="200" r="1"/><circle cx="800" cy="200" r="1"/><circle cx="900" cy="200" r="1"/><circle cx="1000" cy="200" r="1"/><circle cx="1100" cy="200" r="1"/>
+    <circle cx="100" cy="300" r="1"/><circle cx="200" cy="300" r="1"/><circle cx="300" cy="300" r="1"/><circle cx="400" cy="300" r="1"/><circle cx="500" cy="300" r="1"/><circle cx="600" cy="300" r="1"/><circle cx="700" cy="300" r="1"/><circle cx="800" cy="300" r="1"/><circle cx="900" cy="300" r="1"/><circle cx="1000" cy="300" r="1"/><circle cx="1100" cy="300" r="1"/>
+  </g>
+
+  <!-- Logo text -->
+  <text x="600" y="175" text-anchor="middle" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-weight="300" font-size="82" letter-spacing="-2">
+    <tspan fill="#FADB14">ch</tspan><tspan fill="#f5f5f7">type</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="600" y="230" text-anchor="middle" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-weight="400" font-size="22" fill="#f5f5f7" opacity="0.5" letter-spacing="0.5">
+    Type-safe ClickHouse queries for TypeScript
+  </text>
+
+  <!-- Bottom border glow -->
+  <rect x="0" y="398" width="1200" height="2" fill="url(#line1)"/>
+</svg>

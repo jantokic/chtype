@@ -1,13 +1,37 @@
-# chtype
+<p align="center">
+  <a href="https://chtype.jantokic.com">
+    <img src=".github/banner.svg" alt="chtype" width="100%" />
+  </a>
+</p>
 
-**Type-safe ClickHouse toolkit for TypeScript.**
+<p align="center">
+  <a href="https://www.npmjs.com/package/@jantokic/chtype"><img src="https://img.shields.io/npm/v/@jantokic/chtype?style=flat-square&color=FADB14&labelColor=0a0a0a" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@jantokic/chtype"><img src="https://img.shields.io/npm/dm/@jantokic/chtype?style=flat-square&color=FADB14&labelColor=0a0a0a" alt="npm downloads" /></a>
+  <a href="https://github.com/jantokic/chtype/blob/main/LICENSE"><img src="https://img.shields.io/github/license/jantokic/chtype?style=flat-square&color=FADB14&labelColor=0a0a0a" alt="license" /></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D20-FADB14?style=flat-square&labelColor=0a0a0a" alt="node >= 20" />
+  <img src="https://img.shields.io/badge/TypeScript-%3E%3D5.0-FADB14?style=flat-square&labelColor=0a0a0a" alt="TypeScript >= 5.0" />
+  <img src="https://img.shields.io/badge/bun-supported-FADB14?style=flat-square&labelColor=0a0a0a" alt="bun supported" />
+</p>
 
-Generate TypeScript types from your ClickHouse schema, then query with full IDE autocomplete and compile-time validation.
+<p align="center">
+  <b>Type-safe ClickHouse toolkit for TypeScript.</b><br/>
+  Schema codegen &middot; Query builder &middot; Full autocomplete &middot; Zero overhead
+</p>
+
+<p align="center">
+  <a href="https://chtype.jantokic.com">Website</a> &middot;
+  <a href="https://www.npmjs.com/package/@jantokic/chtype">npm</a> &middot;
+  <a href="https://github.com/jantokic/chtype/issues">Issues</a>
+</p>
+
+---
+
+## Install
 
 ```bash
-npm install chtype
+npm install @jantokic/chtype
 # or
-bun add chtype
+bun add @jantokic/chtype
 ```
 
 ## Why chtype?
@@ -43,31 +67,31 @@ This produces a file like:
  * Engine: ReplacingMergeTree(updated_at)
  * ORDER BY: (user_id)
  */
-export interface UsersRow {
+export type UsersRow = {
   user_id: string;
   name: string;
   score: number | null;
   tags: string[];
   updated_at: string;
-}
+};
 
 /** Insert type for `users` — DEFAULT columns are optional. */
-export interface UsersInsert {
+export type UsersInsert = {
   user_id: string;
   name: string;
   score?: number | null;
   tags?: string[];
   updated_at?: string;
-}
+};
 
-export interface Database {
+export type Database = {
   users: {
     row: UsersRow;
     insert: UsersInsert;
     engine: "ReplacingMergeTree";
     versionColumn: "updated_at";
   };
-}
+};
 ```
 
 ### 2. Query with full type safety
@@ -183,9 +207,9 @@ npx chtype generate --config chtype.config.ts
 
 ## Requirements
 
-- Node.js >= 20 or Bun
-- TypeScript >= 5.0
-- ClickHouse server (any recent version)
+- **Node.js** >= 20 (or Bun)
+- **TypeScript** >= 5.0
+- **ClickHouse** server (any recent version)
 
 ## License
 
