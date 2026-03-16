@@ -902,6 +902,17 @@ describe('SelectBuilder', () => {
         .compile();
       expect(sql).toContain('GROUP BY toStartOfHour(timestamp), type');
     });
+
+    it('works when called before select()', () => {
+      const { sql } = qb
+        .selectFrom('events')
+        .groupByTimeInterval('timestamp', 'day')
+        .select(['type', fn.count()])
+        .compile();
+      expect(sql).toContain('toStartOfDay(timestamp)');
+      expect(sql).toContain('GROUP BY toStartOfDay(timestamp)');
+      expect(sql).toMatch(/SELECT.*type.*count\(\).*toStartOfDay\(timestamp\)/);
+    });
   });
 
   describe('whereIf', () => {

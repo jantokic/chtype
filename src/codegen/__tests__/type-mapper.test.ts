@@ -73,19 +73,22 @@ describe('mapClickHouseType', () => {
 
   describe('enum types', () => {
     it("Enum8 → union literals", () => {
-      expect(mapClickHouseType("Enum8('a' = 1, 'b' = 2)")).toBe("'a' | 'b'");
+      expect(mapClickHouseType("Enum8('a' = 1, 'b' = 2)")).toBe('"a" | "b"');
     });
     it("Enum16 → union literals", () => {
-      expect(mapClickHouseType("Enum16('active' = 1, 'inactive' = 2, 'banned' = 3)")).toBe("'active' | 'inactive' | 'banned'");
+      expect(mapClickHouseType("Enum16('active' = 1, 'inactive' = 2, 'banned' = 3)")).toBe('"active" | "inactive" | "banned"');
     });
     it("Enum8 single value", () => {
-      expect(mapClickHouseType("Enum8('only' = 0)")).toBe("'only'");
+      expect(mapClickHouseType("Enum8('only' = 0)")).toBe('"only"');
     });
     it("Nullable(Enum8) → union | null", () => {
-      expect(mapClickHouseType("Nullable(Enum8('yes' = 1, 'no' = 2))")).toBe("'yes' | 'no' | null");
+      expect(mapClickHouseType("Nullable(Enum8('yes' = 1, 'no' = 2))")).toBe('"yes" | "no" | null');
     });
     it("LowCardinality(Enum8) → union", () => {
-      expect(mapClickHouseType("LowCardinality(Enum8('x' = 1, 'y' = 2))")).toBe("'x' | 'y'");
+      expect(mapClickHouseType("LowCardinality(Enum8('x' = 1, 'y' = 2))")).toBe('"x" | "y"');
+    });
+    it("Enum8 with special characters", () => {
+      expect(mapClickHouseType("Enum8('foo\\bar' = 1, 'it''s' = 2)")).toBe('"foo\\\\bar" | "it\'s"');
     });
   });
 

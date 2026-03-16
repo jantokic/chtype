@@ -74,6 +74,7 @@ export class SelectBuilder<
   private _prewheres: WhereClause[] = [];
   private _joins: JoinClause[] = [];
   private _groupBy: string[] = [];
+  private _timeIntervalExprs: Expression[] = [];
   private _havings: WhereClause[] = [];
   private _orderBys: OrderByClause[] = [];
   private _limit: number | Param | null = null;
@@ -251,7 +252,7 @@ export class SelectBuilder<
   ): this {
     const fnName = TIME_INTERVAL_FN[interval];
     const expr = `${fnName}(${column})`;
-    this._columns.push(new Expression(expr));
+    this._timeIntervalExprs.push(new Expression(expr));
     this._groupBy.push(expr);
     return this;
   }
@@ -334,9 +335,10 @@ export class SelectBuilder<
       parts.push(`WITH ${cteParts.join(',\n')}`);
     }
 
+    const allColumns = [...this._columns, ...this._timeIntervalExprs];
     const selectList =
-      this._columns.length > 0
-        ? this._columns.map((c) => {
+      allColumns.length > 0
+        ? allColumns.map((c) => {
             if (c instanceof Expression) {
               registerExpressionParams(c, ctx);
               return c.toString();

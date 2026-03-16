@@ -139,7 +139,7 @@ function parseEnumLiterals(t: string): string {
     }
   }
   if (values.length === 0) return 'string';
-  return values.map((v) => `'${v}'`).join(' | ');
+  return values.map((v) => JSON.stringify(v)).join(' | ');
 }
 
 /** Split a string by top-level commas (not inside parentheses). */

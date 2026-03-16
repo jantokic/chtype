@@ -109,7 +109,7 @@ describe('generate', () => {
       ],
     };
     const output = generate([table], { database: 'test_db' });
-    expect(output).toContain("status: 'active' | 'inactive' | 'banned';");
+    expect(output).toContain('status: "active" | "inactive" | "banned";');
   });
 
   it('applies insertCoerce to Insert but not Row', () => {
