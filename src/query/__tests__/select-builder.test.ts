@@ -753,5 +753,93 @@ describe('SelectBuilder', () => {
       expect(sql).toContain('argMax(name, (user_id, updated_at)) AS latest_name');
       expect(sql).toContain('FROM base');
     });
+
+    it('infers CTE column types from inner query', () => {
+      // Inner query selects user_id and name from users
+      const inner = qb.selectFrom('users').select(['user_id', 'name']);
+      // CTE columns should be typed — select() accepts them without fn.raw()
+      const { sql } = qb
+        .with('latest', inner)
+        .selectFrom('latest')
+        .select(['user_id', 'name'])
+        .where('user_id', '!=', qb.param('excludeId', 'String'))
+        .orderBy('name')
+        .compile();
+      expect(sql).toContain('SELECT user_id, name\nFROM latest');
+      expect(sql).toContain('WHERE user_id != {excludeId:String}');
+      expect(sql).toContain('ORDER BY name ASC');
+    });
+
+    it('CTE column inference works with WHERE and ORDER BY', () => {
+      const inner = qb.selectFrom('users').select(['user_id', 'score']);
+      const { sql } = qb
+        .with('scored', inner)
+        .selectFrom('scored')
+        .select(['user_id', 'score'])
+        .where('score', '>', qb.param('min', 'Float64'))
+        .orderBy('score', 'DESC')
+        .compile();
+      expect(sql).toContain('WHERE score > {min:Float64}');
+      expect(sql).toContain('ORDER BY score DESC');
+    });
+
+    it('CTE SELECT * returns all inferred columns', () => {
+      const inner = qb.selectFrom('users').select(['user_id', 'name']);
+      const { sql } = qb
+        .with('all_users', inner)
+        .selectFrom('all_users')
+        .compile();
+      expect(sql).toContain('SELECT *\nFROM all_users');
+    });
+  });
+
+  describe('whereIf', () => {
+    it('adds condition when truthy', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .whereIf(true, 'score', '>', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).toContain('WHERE score > {min:Float64}');
+    });
+
+    it('skips condition when falsy', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .whereIf(false, 'score', '>', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).not.toContain('WHERE');
+    });
+
+    it('skips condition when null', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .whereIf(null, 'score', '>', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).not.toContain('WHERE');
+    });
+
+    it('skips condition when undefined', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .whereIf(undefined, 'score', '>', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).not.toContain('WHERE');
+    });
+
+    it('chains with regular where()', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('name', '!=', qb.param('name', 'String'))
+        .whereIf(true, 'score', '>', qb.param('min', 'Float64'))
+        .whereIf(false, 'score', '<', qb.param('max', 'Float64'))
+        .compile();
+      expect(sql).toContain('WHERE name != {name:String} AND score > {min:Float64}');
+      expect(sql).not.toContain('max');
+    });
   });
 });

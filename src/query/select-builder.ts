@@ -171,6 +171,19 @@ export class SelectBuilder<
     return this;
   }
 
+  /** Conditionally add a WHERE clause — only applied when `condition` is truthy. */
+  whereIf(
+    condition: unknown,
+    column: ColumnName<DB, T> | Expression | string,
+    op: WhereOp,
+    value?: Param | Expression | [Param | Expression, Param | Expression],
+  ): this {
+    if (condition) {
+      this._wheres.push(buildWhereClause(column, op, value));
+    }
+    return this;
+  }
+
   /**
    * Add a JOIN clause.
    *

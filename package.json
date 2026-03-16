@@ -1,6 +1,6 @@
 {
   "name": "@jantokic/chtype",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "Type-safe ClickHouse toolkit for TypeScript — schema codegen, query builder, and enhanced client",
   "type": "module",
   "main": "./dist/index.js",
