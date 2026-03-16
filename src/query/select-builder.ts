@@ -25,6 +25,7 @@ import { Expression, Subquery } from './expressions.js';
 import { Param } from './param.js';
 import {
   type WhereClause,
+  buildWhereClause,
   createCompileContext,
   mergeParams,
   registerExpressionParams,
@@ -33,7 +34,7 @@ import {
   VALID_IDENTIFIER,
 } from './compile-utils.js';
 
-const TIME_INTERVAL_FN: Record<string, string> = {
+const TIME_INTERVAL_FN: Record<'minute' | 'hour' | 'day' | 'week' | 'month' | 'year', string> = {
   minute: 'toStartOfMinute',
   hour: 'toStartOfHour',
   day: 'toStartOfDay',
@@ -258,18 +259,16 @@ export class SelectBuilder<
   }
 
   having(column: string | Expression, op: ComparisonOp, value: Param | Expression): this;
+  having(column: string | Expression, op: SetOp, value: Param | Expression): this;
+  having(column: string | Expression, op: UnaryOp): this;
+  having(column: string | Expression, op: BetweenOp, value: [Param | Expression, Param | Expression]): this;
   having(condition: Expression): this;
   having(
     columnOrCondition: string | Expression,
-    op?: ComparisonOp,
-    value?: Param | Expression,
+    op?: WhereOp,
+    value?: Param | Expression | [Param | Expression, Param | Expression],
   ): this {
-    if (columnOrCondition instanceof Expression && op === undefined) {
-      this._havings.push({ kind: 'expression', expr: columnOrCondition });
-      return this;
-    }
-    const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : columnOrCondition;
-    this._havings.push({ kind: 'comparison', column: col, op: op!, value: value! });
+    this._havings.push(buildWhereClause(columnOrCondition, op, value));
     return this;
   }
 
@@ -462,24 +461,3 @@ export function except<T = Record<string, unknown>>(...queries: { compile(): Com
   return setOperation('EXCEPT', ...queries);
 }
 
-/** Parse where() arguments into a WhereClause. Shared by where() and prewhere(). */
-function buildWhereClause(
-  columnOrCondition: Expression | string,
-  op?: WhereOp,
-  value?: Param | Expression | [Param | Expression, Param | Expression],
-): WhereClause {
-  if (columnOrCondition instanceof Expression && op === undefined) {
-    return { kind: 'expression', expr: columnOrCondition };
-  }
-  const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
-  if (op === 'IS NULL' || op === 'IS NOT NULL') {
-    return { kind: 'unary', column: col, op };
-  }
-  if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
-    if (!Array.isArray(value) || value.length < 2) {
-      throw new Error(`${op} requires a [low, high] tuple`);
-    }
-    return { kind: 'between', column: col, op, low: value[0]!, high: value[1]! };
-  }
-  return { kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression };
-}

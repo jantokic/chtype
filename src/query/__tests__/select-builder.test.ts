@@ -62,6 +62,49 @@ describe('SelectBuilder', () => {
     expect(sql).toContain('HAVING total > {min:UInt32}');
   });
 
+  it('builds HAVING with IS NOT NULL (unary)', () => {
+    const { sql } = qb
+      .selectFrom('users')
+      .select([qb.fn.count().as('total')])
+      .groupBy('name')
+      .having('total', 'IS NOT NULL')
+      .compile();
+    expect(sql).toContain('HAVING total IS NOT NULL');
+  });
+
+  it('builds HAVING with BETWEEN', () => {
+    const { sql } = qb
+      .selectFrom('users')
+      .select([qb.fn.count().as('total')])
+      .groupBy('name')
+      .having('total', 'BETWEEN', [qb.param('low', 'UInt32'), qb.param('high', 'UInt32')])
+      .compile();
+    expect(sql).toContain('HAVING total BETWEEN {low:UInt32} AND {high:UInt32}');
+  });
+
+  it('builds HAVING with IN (set op)', () => {
+    const { sql } = qb
+      .selectFrom('users')
+      .select([qb.fn.count().as('total')])
+      .groupBy('name')
+      .having('total', 'IN', qb.param('vals', 'Array(UInt32)'))
+      .compile();
+    expect(sql).toContain('HAVING total IN {vals:Array(UInt32)}');
+  });
+
+  it('builds HAVING with or() group', () => {
+    const { sql } = qb
+      .selectFrom('users')
+      .select([qb.fn.count().as('total')])
+      .groupBy('name')
+      .having(or(
+        ['total', '>', qb.param('min', 'UInt32')],
+        ['total', '<', qb.param('max', 'UInt32')],
+      ))
+      .compile();
+    expect(sql).toContain('HAVING (total > {min:UInt32} OR total < {max:UInt32})');
+  });
+
   it('builds ORDER BY', () => {
     const { sql } = qb.selectFrom('users').select(['user_id']).orderBy('score', 'DESC').compile();
     expect(sql).toContain('ORDER BY score DESC');
@@ -1006,6 +1049,12 @@ describe('SelectBuilder', () => {
       expect(sql).toBe('TRUNCATE TABLE users_staging');
       expect(params).toEqual({});
     });
+
+    it('rejects invalid table names', () => {
+      expect(() => {
+        qb.truncate('bad; DROP TABLE users');
+      }).toThrow('Invalid table name');
+    });
   });
 
   describe('EXCHANGE TABLES', () => {
@@ -1013,6 +1062,27 @@ describe('SelectBuilder', () => {
       const { sql, params } = qb.exchangeTables('users_latest', 'users_latest_next').compile();
       expect(sql).toBe('EXCHANGE TABLES users_latest AND users_latest_next');
       expect(params).toEqual({});
+    });
+
+    it('rejects invalid first table name', () => {
+      expect(() => {
+        qb.exchangeTables('bad; DROP TABLE', 'ok');
+      }).toThrow('Invalid table name');
+    });
+
+    it('rejects invalid second table name', () => {
+      expect(() => {
+        qb.exchangeTables('ok', 'bad; DROP TABLE');
+      }).toThrow('Invalid table name');
+    });
+  });
+
+  describe('INSERT ... SELECT validation', () => {
+    it('rejects invalid table names in insertFrom', () => {
+      const select = qb.selectFrom('users').select(['user_id']);
+      expect(() => {
+        qb.insertFrom('bad; DROP TABLE users', select);
+      }).toThrow('Invalid table name');
     });
   });
 });

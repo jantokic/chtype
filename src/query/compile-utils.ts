@@ -2,7 +2,7 @@
  * Shared compilation utilities for SELECT, DELETE, and UPDATE builders.
  */
 
-import type { BetweenOp, ComparisonOp, SetOp, UnaryOp } from './types.js';
+import type { BetweenOp, ComparisonOp, SetOp, UnaryOp, WhereOp } from './types.js';
 import { Expression, Subquery } from './expressions.js';
 import { Param } from './param.js';
 
@@ -79,3 +79,25 @@ export function registerExpressionParams(expr: Expression, ctx: CompileContext):
 
 /** Valid SQL identifier pattern (settings keys, CTE names, cluster names, column names). */
 export const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+/** Parse where() arguments into a WhereClause. Shared by SELECT, DELETE, and UPDATE builders. */
+export function buildWhereClause(
+  columnOrCondition: Expression | string,
+  op?: WhereOp,
+  value?: Param | Expression | [Param | Expression, Param | Expression],
+): WhereClause {
+  if (columnOrCondition instanceof Expression && op === undefined) {
+    return { kind: 'expression', expr: columnOrCondition };
+  }
+  const col = columnOrCondition instanceof Expression ? columnOrCondition.sql : (columnOrCondition as string);
+  if (op === 'IS NULL' || op === 'IS NOT NULL') {
+    return { kind: 'unary', column: col, op };
+  }
+  if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
+    if (!Array.isArray(value) || value.length < 2) {
+      throw new Error(`${op} requires a [low, high] tuple`);
+    }
+    return { kind: 'between', column: col, op, low: value[0]!, high: value[1]! };
+  }
+  return { kind: 'comparison', column: col, op: op as ComparisonOp | SetOp, value: value as Param | Expression };
+}

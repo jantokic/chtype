@@ -87,4 +87,33 @@ describe('DeleteBuilder', () => {
       .compile();
     expect(sql).toBe('ALTER TABLE users DELETE WHERE score BETWEEN {low:Float64} AND {high:Float64}');
   });
+
+  describe('whereIf', () => {
+    it('adds condition when truthy', () => {
+      const { sql } = qb
+        .deleteFrom('users')
+        .where('user_id', '=', qb.param('id', 'String'))
+        .whereIf(true, 'score', '<', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).toContain('DELETE WHERE user_id = {id:String} AND score < {min:Float64}');
+    });
+
+    it('skips condition when falsy', () => {
+      const { sql } = qb
+        .deleteFrom('users')
+        .where('user_id', '=', qb.param('id', 'String'))
+        .whereIf(false, 'score', '<', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).not.toContain('score');
+    });
+
+    it('skips condition when null', () => {
+      const { sql } = qb
+        .deleteFrom('users')
+        .where('user_id', '=', qb.param('id', 'String'))
+        .whereIf(null, 'score', '<', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).not.toContain('score');
+    });
+  });
 });

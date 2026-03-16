@@ -105,4 +105,36 @@ describe('UpdateBuilder', () => {
       'ALTER TABLE users UPDATE name = {newName:String} WHERE score BETWEEN {low:Float64} AND {high:Float64}',
     );
   });
+
+  describe('whereIf', () => {
+    it('adds condition when truthy', () => {
+      const { sql } = qb
+        .update('users')
+        .set('name', qb.param('newName', 'String'))
+        .where('user_id', '=', qb.param('id', 'String'))
+        .whereIf(true, 'score', '>', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).toContain('WHERE user_id = {id:String} AND score > {min:Float64}');
+    });
+
+    it('skips condition when falsy', () => {
+      const { sql } = qb
+        .update('users')
+        .set('name', qb.param('newName', 'String'))
+        .where('user_id', '=', qb.param('id', 'String'))
+        .whereIf(false, 'score', '>', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).not.toContain('score');
+    });
+
+    it('skips condition when undefined', () => {
+      const { sql } = qb
+        .update('users')
+        .set('name', qb.param('newName', 'String'))
+        .where('user_id', '=', qb.param('id', 'String'))
+        .whereIf(undefined, 'score', '>', qb.param('min', 'Float64'))
+        .compile();
+      expect(sql).not.toContain('score');
+    });
+  });
 });

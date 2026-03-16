@@ -240,7 +240,7 @@ const diffCommand = defineCommand({
 const main = defineCommand({
   meta: {
     name: 'chtype',
-    version: '0.1.0',
+    version: '0.9.0',
     description: 'Type-safe ClickHouse toolkit for TypeScript',
   },
   subCommands: {

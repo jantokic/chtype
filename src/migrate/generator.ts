@@ -153,5 +153,5 @@ function quoteIdentifier(name: string): string {
 
 /** Escape and quote a string for use in SQL (single quotes). */
 function quoteSingleString(value: string): string {
-  return `'${value.replace(/'/g, "\\'")}'`;
+  return `'${value.replace(/'/g, "''")}'`;
 }
