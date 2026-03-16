@@ -61,7 +61,7 @@ function generateRowInterface(table: IntrospectedTable, options: GeneratorOption
     return `${comment}  ${quoteProperty(col.name)}: ${tsType};`;
   });
 
-  return `${jsdoc(docLines)}export interface ${rowName(table.name)} {\n${fields.join('\n')}\n}`;
+  return `${jsdoc(docLines)}export type ${rowName(table.name)} = {\n${fields.join('\n')}\n}`;
 }
 
 function generateInsertInterface(table: IntrospectedTable, options: GeneratorOptions): string {
@@ -79,7 +79,7 @@ function generateInsertInterface(table: IntrospectedTable, options: GeneratorOpt
     return `${comment}  ${quoteProperty(col.name)}${optional}: ${tsType};`;
   });
 
-  return `/** Insert type for \`${table.name}\` — DEFAULT columns are optional, MATERIALIZED/ALIAS columns excluded. */\nexport interface ${insertName(table.name)} {\n${fields.join('\n')}\n}`;
+  return `/** Insert type for \`${table.name}\` — DEFAULT columns are optional, MATERIALIZED/ALIAS columns excluded. */\nexport type ${insertName(table.name)} = {\n${fields.join('\n')}\n}`;
 }
 
 function generateDatabaseType(tables: IntrospectedTable[]): string {

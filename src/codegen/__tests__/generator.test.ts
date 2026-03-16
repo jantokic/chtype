@@ -24,7 +24,7 @@ const sampleTable: IntrospectedTable = {
 describe('generate', () => {
   it('generates Row interface with all columns', () => {
     const output = generate([sampleTable], { database: 'test_db' });
-    expect(output).toContain('export interface UsersRow {');
+    expect(output).toContain('export type UsersRow = {');
     expect(output).toContain('user_id: string;');
     expect(output).toContain('score: number | null;');
     expect(output).toContain('tags: string[];');
@@ -39,7 +39,7 @@ describe('generate', () => {
 
   it('excludes MATERIALIZED columns from Insert', () => {
     const output = generate([sampleTable], { database: 'test_db' });
-    const insertSection = output.split('export interface UsersInsert')[1]!.split('}')[0]!;
+    const insertSection = output.split('export type UsersInsert')[1]!.split('}')[0]!;
     expect(insertSection).not.toContain('computed_field');
   });
 
@@ -80,7 +80,7 @@ describe('generate', () => {
       name: 'market_USDC_volume',
     };
     const output = generate([table], { database: 'test_db' });
-    expect(output).toContain('export interface MarketUSDCVolumeRow {');
+    expect(output).toContain('export type MarketUSDCVolumeRow = {');
   });
 
   it('respects bigints option', () => {
@@ -91,12 +91,12 @@ describe('generate', () => {
     };
     const output = generate([table], { database: 'test_db' });
     // Row type stays string, Insert type gets coercion
-    expect(output).toContain('export interface CountersRow {\n  count: string;\n}');
-    expect(output).toContain('export interface CountersInsert {\n  count: number | string;\n}');
+    expect(output).toContain('export type CountersRow = {\n  count: string;\n}');
+    expect(output).toContain('export type CountersInsert = {\n  count: number | string;\n}');
 
     const bigintOutput = generate([table], { database: 'test_db', bigints: true });
-    expect(bigintOutput).toContain('export interface CountersRow {\n  count: bigint;\n}');
-    expect(bigintOutput).toContain('export interface CountersInsert {\n  count: number | bigint;\n}');
+    expect(bigintOutput).toContain('export type CountersRow = {\n  count: bigint;\n}');
+    expect(bigintOutput).toContain('export type CountersInsert = {\n  count: number | bigint;\n}');
   });
 
   it('applies insertCoerce to Insert but not Row', () => {
@@ -111,8 +111,8 @@ describe('generate', () => {
     };
     const output = generate([table], { database: 'test_db' });
     // Row types: Decimal and DateTime stay as string
-    expect(output).toContain('export interface SnapshotsRow {\n  id: string;\n  amount: string;\n  captured_at: string;\n}');
+    expect(output).toContain('export type SnapshotsRow = {\n  id: string;\n  amount: string;\n  captured_at: string;\n}');
     // Insert types: Decimal and DateTime get number | string
-    expect(output).toContain('export interface SnapshotsInsert {\n  id: string;\n  amount: number | string;\n  captured_at: number | string;\n}');
+    expect(output).toContain('export type SnapshotsInsert = {\n  id: string;\n  amount: number | string;\n  captured_at: number | string;\n}');
   });
 });
