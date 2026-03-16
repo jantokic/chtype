@@ -3,13 +3,18 @@ import { Param } from './param.js';
 
 /** Represents a raw SQL expression with an optional alias. TType carries the result type for typed expressions. */
 export class Expression<TType = unknown> {
+  readonly params: Param[];
+
   constructor(
     public readonly sql: string,
     public readonly alias?: string,
-  ) {}
+    params?: Param[],
+  ) {
+    this.params = params ?? [];
+  }
 
   as<A extends string>(alias: A): Expression<TType> & { alias: A } {
-    return new Expression<TType>(this.sql, alias) as Expression<TType> & { alias: A };
+    return new Expression<TType>(this.sql, alias, this.params) as Expression<TType> & { alias: A };
   }
 
   toString(): string {
@@ -280,8 +285,25 @@ export const fn = {
     return new Expression(`avgIf(${column}, ${condition})`);
   },
 
-  /** Raw SQL expression — escape hatch for anything not covered. */
-  raw(sql: string): Expression {
-    return new Expression(sql);
+  /** Raw SQL expression — escape hatch for anything not covered.
+   *  Accepts variadic args to interpolate Params: fn.raw('INTERVAL ', param, ' HOUR')
+   */
+  raw(...parts: (string | Param | Expression)[]): Expression {
+    if (parts.length === 1 && typeof parts[0] === 'string') {
+      return new Expression(parts[0]);
+    }
+    const params: Param[] = [];
+    const sql = parts
+      .map((p) => {
+        if (typeof p === 'string') return p;
+        if (p instanceof Param) {
+          params.push(p);
+          return p.toString();
+        }
+        params.push(...p.params);
+        return p.sql;
+      })
+      .join('');
+    return new Expression(sql, undefined, params);
   },
 };

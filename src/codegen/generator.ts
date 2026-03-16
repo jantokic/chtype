@@ -90,7 +90,7 @@ function generateDatabaseType(tables: IntrospectedTable[]): string {
     return `  ${quoteProperty(table.name)}: {\n    row: ${rowName(table.name)};\n    insert: ${insertName(table.name)};\n    engine: ${engineLiteral};\n    versionColumn: ${versionLiteral};\n  };`;
   });
 
-  return `/** Database registry — maps table names to their Row/Insert types and engine metadata. */\nexport interface Database {\n${entries.join('\n')}\n}`;
+  return `/** Database registry — maps table names to their Row/Insert types and engine metadata. */\nexport type Database = {\n${entries.join('\n')}\n}`;
 }
 
 export function generate(tables: IntrospectedTable[], options: GeneratorOptions): string {

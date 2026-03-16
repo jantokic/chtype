@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { fn } from '../expressions.js';
+import { Param } from '../param.js';
 
 describe('fn — function helpers', () => {
   describe('argMax / argMin', () => {
@@ -230,6 +231,53 @@ describe('fn — function helpers', () => {
     it('as() works on all function results', () => {
       const expr = fn.arrayMap('x -> x * 2', 'nums').as('doubled');
       expect(expr.toString()).toBe('arrayMap(x -> x * 2, nums) AS doubled');
+    });
+  });
+
+  describe('fn.raw() with param interpolation', () => {
+    it('plain string (backwards compat)', () => {
+      const expr = fn.raw('now()');
+      expect(expr.sql).toBe('now()');
+      expect(expr.params).toHaveLength(0);
+    });
+
+    it('interpolates Param into SQL and tracks it', () => {
+      const p = new Param('n', 'UInt32');
+      const expr = fn.raw('now() - INTERVAL ', p, ' HOUR');
+      expect(expr.sql).toBe('now() - INTERVAL {n:UInt32} HOUR');
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('n');
+    });
+
+    it('interpolates multiple Params', () => {
+      const p1 = new Param('start', 'DateTime');
+      const p2 = new Param('end', 'DateTime');
+      const expr = fn.raw('dateDiff(\'hour\', ', p1, ', ', p2, ')');
+      expect(expr.sql).toBe("dateDiff('hour', {start:DateTime}, {end:DateTime})");
+      expect(expr.params).toHaveLength(2);
+    });
+
+    it('interpolates Expression args (no params)', () => {
+      const inner = fn.now();
+      const expr = fn.raw('dateDiff(\'day\', created_at, ', inner, ')');
+      expect(expr.sql).toBe("dateDiff('day', created_at, now())");
+      expect(expr.params).toHaveLength(0);
+    });
+
+    it('interpolates Expression args that carry params', () => {
+      const p = new Param('n', 'UInt32');
+      const inner = fn.raw('INTERVAL ', p, ' DAY');
+      const expr = fn.raw('col > now() - ', inner);
+      expect(expr.sql).toBe('col > now() - INTERVAL {n:UInt32} DAY');
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('n');
+    });
+
+    it('as() preserves params', () => {
+      const p = new Param('n', 'UInt32');
+      const expr = fn.raw('INTERVAL ', p, ' HOUR').as('time_offset');
+      expect(expr.toString()).toBe('INTERVAL {n:UInt32} HOUR AS time_offset');
+      expect(expr.params).toHaveLength(1);
     });
   });
 });

@@ -3,7 +3,7 @@
  */
 
 import type { BetweenOp, ComparisonOp, SetOp, UnaryOp } from './types.js';
-import { ConditionGroup, Expression, Subquery } from './expressions.js';
+import { Expression, Subquery } from './expressions.js';
 import { Param } from './param.js';
 
 export type WhereClause =
@@ -45,6 +45,7 @@ export function renderValue(value: number | Param | Expression, ctx: CompileCont
     return value.toString();
   }
   if (value instanceof Expression) {
+    registerExpressionParams(value, ctx);
     return value.sql;
   }
   // Only numbers reach here (from limit/offset)
@@ -60,16 +61,19 @@ export function renderWhereClause(w: WhereClause, ctx: CompileContext): string {
     case 'between':
       return `${w.column} ${w.op} ${renderValue(w.low, ctx)} AND ${renderValue(w.high, ctx)}`;
     case 'expression': {
-      if (w.expr instanceof ConditionGroup) {
-        for (const p of w.expr.params) {
-          if (ctx.externalParams.has(p.name)) {
-            throw new Error(`Param name collision: "${p.name}" is used in both the subquery/CTE and outer query`);
-          }
-          ctx.params[p.name] = undefined;
-        }
-      }
+      registerExpressionParams(w.expr, ctx);
       return w.expr.sql;
     }
+  }
+}
+
+/** Register params carried by an Expression (from fn.raw() with Params, or ConditionGroup). */
+export function registerExpressionParams(expr: Expression, ctx: CompileContext): void {
+  for (const p of expr.params) {
+    if (ctx.externalParams.has(p.name)) {
+      throw new Error(`Param name collision: "${p.name}" is used in both the subquery/CTE and outer query`);
+    }
+    ctx.params[p.name] = undefined;
   }
 }
 

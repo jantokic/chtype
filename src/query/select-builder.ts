@@ -27,6 +27,7 @@ import {
   type WhereClause,
   createCompileContext,
   mergeParams,
+  registerExpressionParams,
   renderValue,
   renderWhereClause,
   VALID_IDENTIFIER,
@@ -302,7 +303,13 @@ export class SelectBuilder<
 
     const selectList =
       this._columns.length > 0
-        ? this._columns.map((c) => (c instanceof Expression ? c.toString() : c)).join(', ')
+        ? this._columns.map((c) => {
+            if (c instanceof Expression) {
+              registerExpressionParams(c, ctx);
+              return c.toString();
+            }
+            return c;
+          }).join(', ')
         : '*';
     const distinctMod = this._distinct ? 'DISTINCT ' : '';
     parts.push(`SELECT ${distinctMod}${selectList}`);

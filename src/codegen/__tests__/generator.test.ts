@@ -45,7 +45,7 @@ describe('generate', () => {
 
   it('generates Database registry', () => {
     const output = generate([sampleTable], { database: 'test_db' });
-    expect(output).toContain('export interface Database {');
+    expect(output).toContain('export type Database = {');
     expect(output).toContain('row: UsersRow;');
     expect(output).toContain('insert: UsersInsert;');
     expect(output).toContain('engine: "ReplacingMergeTree"');

@@ -415,6 +415,20 @@ describe('SelectBuilder', () => {
     });
   });
 
+  describe('fn.raw() params in SELECT columns', () => {
+    it('registers params from fn.raw() expressions in SELECT', () => {
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select([
+          'user_id',
+          qb.fn.raw('now() - INTERVAL ', qb.param('hours', 'UInt32'), ' HOUR').as('cutoff'),
+        ])
+        .compile();
+      expect(sql).toContain('now() - INTERVAL {hours:UInt32} HOUR AS cutoff');
+      expect(params).toHaveProperty('hours');
+    });
+  });
+
   describe('SAMPLE', () => {
     it('builds SAMPLE with ratio', () => {
       const { sql } = qb.selectFrom('users').select(['user_id']).sample(0.1).compile();
