@@ -464,4 +464,175 @@ describe('fn — function helpers', () => {
       expect(group.params.map((p) => p.name)).toEqual(['a', 'b']);
     });
   });
+
+  describe('fn.interval / fn.ago with Param', () => {
+    it('fn.interval with Param emits placeholder', () => {
+      const p = new Param('n', 'UInt32');
+      const expr = fn.interval(p, 'DAY');
+      expect(expr.sql).toBe('INTERVAL {n:UInt32} DAY');
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('n');
+    });
+
+    it('fn.ago with Param emits placeholder', () => {
+      const p = new Param('days', 'UInt32');
+      const expr = fn.ago(p, 'DAY');
+      expect(expr.sql).toBe('now() - INTERVAL {days:UInt32} DAY');
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('days');
+    });
+
+    it('fn.interval with number still works', () => {
+      expect(fn.interval(5, 'MINUTE').sql).toBe('INTERVAL 5 MINUTE');
+      expect(fn.interval(5, 'MINUTE').params).toHaveLength(0);
+    });
+
+    it('fn.ago with number still works', () => {
+      expect(fn.ago(7, 'DAY').sql).toBe('now() - INTERVAL 7 DAY');
+      expect(fn.ago(7, 'DAY').params).toHaveLength(0);
+    });
+  });
+
+  describe('fn.ifNull', () => {
+    it('emits ifNull with string default', () => {
+      expect(fn.ifNull('col', '0').sql).toBe('ifNull(col, 0)');
+    });
+
+    it('emits ifNull with number default', () => {
+      expect(fn.ifNull('col', 0).sql).toBe('ifNull(col, 0)');
+    });
+
+    it('emits ifNull with Param default', () => {
+      const p = new Param('def', 'UInt32');
+      const expr = fn.ifNull('col', p);
+      expect(expr.sql).toBe('ifNull(col, {def:UInt32})');
+      expect(expr.params).toHaveLength(1);
+    });
+
+    it('emits ifNull with Expression default', () => {
+      const inner = fn.now();
+      expect(fn.ifNull('col', inner).sql).toBe('ifNull(col, now())');
+    });
+
+    it('propagates params from Expression default', () => {
+      const p = new Param('n', 'UInt32');
+      const inner = fn.raw('INTERVAL ', p, ' DAY');
+      const expr = fn.ifNull('col', inner);
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('n');
+    });
+  });
+
+  describe('fn.now64', () => {
+    it('emits now64() without precision', () => {
+      expect(fn.now64().sql).toBe('now64()');
+    });
+
+    it('emits now64(3) with precision', () => {
+      expect(fn.now64(3).sql).toBe('now64(3)');
+    });
+
+    it('emits now64(6) with precision', () => {
+      expect(fn.now64(6).sql).toBe('now64(6)');
+    });
+  });
+
+  describe('argMax/argMin with Expression first arg', () => {
+    it('argMax accepts Expression as first arg', () => {
+      const col = fn.raw('o.outcome_index');
+      const expr = fn.argMax(col, 'updated_at');
+      expect(expr.sql).toBe('argMax(o.outcome_index, updated_at)');
+    });
+
+    it('argMin accepts Expression as first arg', () => {
+      const col = fn.raw('o.name');
+      const expr = fn.argMin(col, 'updated_at');
+      expect(expr.sql).toBe('argMin(o.name, updated_at)');
+    });
+
+    it('argMax with Expression propagates params', () => {
+      const p = new Param('n', 'UInt32');
+      const col = fn.raw('col + ', p);
+      const expr = fn.argMax(col, 'ts');
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('n');
+    });
+
+    it('argMaxIf accepts Expression as first arg', () => {
+      const col = fn.raw('o.value');
+      const cond = fn.raw('active = 1');
+      const expr = fn.argMaxIf(col, 'ts', cond);
+      expect(expr.sql).toBe('argMaxIf(o.value, ts, active = 1)');
+    });
+
+    it('argMinIf accepts Expression as first arg', () => {
+      const col = fn.raw('o.value');
+      const cond = fn.raw('active = 1');
+      const expr = fn.argMinIf(col, 'ts', cond);
+      expect(expr.sql).toBe('argMinIf(o.value, ts, active = 1)');
+    });
+
+    it('argMaxIf propagates params from both column and condition', () => {
+      const p1 = new Param('x', 'UInt32');
+      const p2 = new Param('y', 'String');
+      const col = fn.raw('col + ', p1);
+      const cond = fn.raw('status = ', p2);
+      const expr = fn.argMaxIf(col, 'ts', cond);
+      expect(expr.params).toHaveLength(2);
+      expect(expr.params.map((p) => p.name)).toEqual(['x', 'y']);
+    });
+  });
+
+  describe('countIf/sumIf/avgIf with Expression condition', () => {
+    it('countIf accepts Expression condition', () => {
+      const cond = fn.raw('status = 1');
+      const expr = fn.countIf(cond);
+      expect(expr.sql).toBe('countIf(status = 1)');
+    });
+
+    it('sumIf accepts Expression condition', () => {
+      const cond = fn.raw('active = 1');
+      const expr = fn.sumIf('amount', cond);
+      expect(expr.sql).toBe('sumIf(amount, active = 1)');
+    });
+
+    it('avgIf accepts Expression condition', () => {
+      const cond = fn.raw('active = 1');
+      const expr = fn.avgIf('score', cond);
+      expect(expr.sql).toBe('avgIf(score, active = 1)');
+    });
+
+    it('countIf propagates params from Expression condition', () => {
+      const p = new Param('status', 'UInt8');
+      const cond = fn.raw('status = ', p);
+      const expr = fn.countIf(cond);
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('status');
+    });
+
+    it('sumIf propagates params from Expression condition', () => {
+      const p = new Param('flag', 'UInt8');
+      const cond = fn.raw('flag = ', p);
+      const expr = fn.sumIf('amount', cond);
+      expect(expr.params).toHaveLength(1);
+    });
+
+    it('countIf still works with string condition', () => {
+      expect(fn.countIf('status = 1').sql).toBe('countIf(status = 1)');
+      expect(fn.countIf('status = 1').params).toHaveLength(0);
+    });
+  });
+
+  describe('Expression.as() type annotation', () => {
+    it('as() returns correct alias', () => {
+      const expr = fn.argMax('name', 'updated_at').as('name');
+      expect(expr.alias).toBe('name');
+    });
+
+    it('as<T>() preserves generic type parameter', () => {
+      const expr = fn.argMax('name', 'updated_at').as<string>('name');
+      expect(expr.alias).toBe('name');
+      expect(expr.toString()).toBe('argMax(name, updated_at) AS name');
+    });
+  });
 });

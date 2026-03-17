@@ -13,8 +13,8 @@ export class Expression<TType = unknown> {
     this.params = params ?? [];
   }
 
-  as<A extends string>(alias: A): Expression<TType> & { alias: A } {
-    return new Expression<TType>(this.sql, alias, this.params) as Expression<TType> & { alias: A };
+  as<A extends string, T = TType>(alias: A): Expression<T> & { alias: A } {
+    return new Expression<T>(this.sql, alias, this.params) as Expression<T> & { alias: A };
   }
 
   toString(): string {
@@ -70,21 +70,29 @@ export function and(...conditions: (ConditionTuple | Expression)[]): ConditionGr
 /** A subquery expression — wraps a compiled SELECT in parentheses and carries its params. */
 export class Subquery extends Expression {
   readonly subqueryParams: Record<string, unknown>;
+  readonly paramTypes: Map<string, string>;
 
   constructor(compiled: CompiledQuery<unknown>) {
     super(`(${compiled.sql})`);
     this.subqueryParams = compiled.params;
+    this.paramTypes = compiled.paramTypes ?? new Map();
   }
 }
 
 /** ClickHouse function builders. */
 export const fn = {
-  argMax(column: string, versionColumn: string | string[]): Expression {
+  argMax(column: string | Expression, versionColumn: string | string[]): Expression {
     const ver = Array.isArray(versionColumn) ? `(${versionColumn.join(', ')})` : versionColumn;
+    if (column instanceof Expression) {
+      return new Expression(`argMax(${column.sql}, ${ver})`, undefined, [...column.params]);
+    }
     return new Expression(`argMax(${column}, ${ver})`);
   },
-  argMin(column: string, versionColumn: string | string[]): Expression {
+  argMin(column: string | Expression, versionColumn: string | string[]): Expression {
     const ver = Array.isArray(versionColumn) ? `(${versionColumn.join(', ')})` : versionColumn;
+    if (column instanceof Expression) {
+      return new Expression(`argMin(${column.sql}, ${ver})`, undefined, [...column.params]);
+    }
     return new Expression(`argMin(${column}, ${ver})`);
   },
   count(column?: string): Expression {
@@ -207,6 +215,9 @@ export const fn = {
   now(): Expression {
     return new Expression('now()');
   },
+  now64(precision?: number): Expression {
+    return new Expression(precision !== undefined ? `now64(${precision})` : 'now64()');
+  },
   today(): Expression {
     return new Expression('today()');
   },
@@ -244,6 +255,15 @@ export const fn = {
   coalesce(...columns: string[]): Expression {
     return new Expression(`coalesce(${columns.join(', ')})`);
   },
+  ifNull(col: string, defaultValue: string | number | Param | Expression): Expression {
+    if (defaultValue instanceof Param) {
+      return new Expression(`ifNull(${col}, ${defaultValue.toString()})`, undefined, [defaultValue]);
+    }
+    if (defaultValue instanceof Expression) {
+      return new Expression(`ifNull(${col}, ${defaultValue.sql})`, undefined, [...defaultValue.params]);
+    }
+    return new Expression(`ifNull(${col}, ${defaultValue})`);
+  },
 
   // --- Type conversion ---
 
@@ -277,22 +297,35 @@ export const fn = {
   anyLast(column: string): Expression {
     return new Expression(`anyLast(${column})`);
   },
-  sumIf(column: string, condition: string): Expression {
+  sumIf(column: string, condition: string | Expression): Expression {
+    if (condition instanceof Expression) {
+      return new Expression(`sumIf(${column}, ${condition.sql})`, undefined, [...condition.params]);
+    }
     return new Expression(`sumIf(${column}, ${condition})`);
   },
-  countIf(condition: string): Expression {
+  countIf(condition: string | Expression): Expression {
+    if (condition instanceof Expression) {
+      return new Expression(`countIf(${condition.sql})`, undefined, [...condition.params]);
+    }
     return new Expression(`countIf(${condition})`);
   },
-  avgIf(column: string, condition: string): Expression {
+  avgIf(column: string, condition: string | Expression): Expression {
+    if (condition instanceof Expression) {
+      return new Expression(`avgIf(${column}, ${condition.sql})`, undefined, [...condition.params]);
+    }
     return new Expression(`avgIf(${column}, ${condition})`);
   },
-  argMaxIf(column: string, versionColumn: string | string[], condition: Expression): Expression {
+  argMaxIf(column: string | Expression, versionColumn: string | string[], condition: Expression): Expression {
     const ver = Array.isArray(versionColumn) ? `(${versionColumn.join(', ')})` : versionColumn;
-    return new Expression(`argMaxIf(${column}, ${ver}, ${condition.sql})`, undefined, [...condition.params]);
+    const colSql = column instanceof Expression ? column.sql : column;
+    const colParams = column instanceof Expression ? column.params : [];
+    return new Expression(`argMaxIf(${colSql}, ${ver}, ${condition.sql})`, undefined, [...colParams, ...condition.params]);
   },
-  argMinIf(column: string, versionColumn: string | string[], condition: Expression): Expression {
+  argMinIf(column: string | Expression, versionColumn: string | string[], condition: Expression): Expression {
     const ver = Array.isArray(versionColumn) ? `(${versionColumn.join(', ')})` : versionColumn;
-    return new Expression(`argMinIf(${column}, ${ver}, ${condition.sql})`, undefined, [...condition.params]);
+    const colSql = column instanceof Expression ? column.sql : column;
+    const colParams = column instanceof Expression ? column.params : [];
+    return new Expression(`argMinIf(${colSql}, ${ver}, ${condition.sql})`, undefined, [...colParams, ...condition.params]);
   },
 
   // --- Aggregate -State combinators (for writing to AggregatingMergeTree) ---
@@ -351,10 +384,16 @@ export const fn = {
 
   // --- Arithmetic / interval helpers ---
 
-  interval(n: number, unit: 'SECOND' | 'MINUTE' | 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'): Expression {
+  interval(n: number | Param, unit: 'SECOND' | 'MINUTE' | 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'): Expression {
+    if (n instanceof Param) {
+      return new Expression(`INTERVAL ${n.toString()} ${unit}`, undefined, [n]);
+    }
     return new Expression(`INTERVAL ${n} ${unit}`);
   },
-  ago(n: number, unit: 'SECOND' | 'MINUTE' | 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'): Expression {
+  ago(n: number | Param, unit: 'SECOND' | 'MINUTE' | 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'): Expression {
+    if (n instanceof Param) {
+      return new Expression(`now() - INTERVAL ${n.toString()} ${unit}`, undefined, [n]);
+    }
     return new Expression(`now() - INTERVAL ${n} ${unit}`);
   },
   sub(left: Expression, right: Expression): Expression {

@@ -99,7 +99,7 @@ export class DeleteBuilder<
     const conditions = this._wheres.map((w) => renderWhereClause(w, ctx));
     const sql = `ALTER TABLE ${table}${clusterClause} DELETE WHERE ${conditions.join(' AND ')}`;
 
-    return { sql, params: ctx.params };
+    return { sql, params: ctx.params, paramTypes: ctx.paramTypes };
   }
 }
 

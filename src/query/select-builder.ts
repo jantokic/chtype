@@ -242,8 +242,9 @@ export class SelectBuilder<
     return this.join('ANY LEFT JOIN', table, alias, onLeft, onRight);
   }
 
-  groupBy(...columns: (ColumnName<DB, T> | Expression | string)[]): this {
-    this._groupBy.push(...columns.map((c) => (c instanceof Expression ? c.sql : c)));
+  groupBy(...columns: (ColumnName<DB, T> | Expression | string | (ColumnName<DB, T> | Expression | string)[])[]): this {
+    const flat = columns.length === 1 && Array.isArray(columns[0]) ? columns[0] : columns;
+    this._groupBy.push(...(flat as (ColumnName<DB, T> | Expression | string)[]).map((c) => (c instanceof Expression ? c.sql : c)));
     return this;
   }
 
@@ -328,7 +329,7 @@ export class SelectBuilder<
     // WITH (CTE) clauses
     if (this._ctes.length > 0) {
       const cteParts = this._ctes.map((cte) => {
-        mergeParams(ctx, cte.subquery.subqueryParams);
+        mergeParams(ctx, cte.subquery.subqueryParams, cte.subquery.paramTypes);
         return `${cte.name} AS ${cte.subquery.sql}`;
       });
       parts.push(`WITH ${cteParts.join(',\n')}`);
@@ -408,7 +409,7 @@ export class SelectBuilder<
       parts.push(`SETTINGS ${settingsStr}`);
     }
 
-    return { sql: parts.join('\n'), params: ctx.params };
+    return { sql: parts.join('\n'), params: ctx.params, paramTypes: ctx.paramTypes };
   }
 }
 

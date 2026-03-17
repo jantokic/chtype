@@ -20,6 +20,8 @@ export interface CompiledQuery<TResult = Record<string, unknown>> {
   sql: string;
   /** Registry of parameter names that appear in the query. Values are undefined (filled at execution time). */
   params: Record<string, unknown>;
+  /** Map of param name → ClickHouse type for deduplication across CTEs. */
+  paramTypes?: Map<string, string>;
   /** Phantom field — never set at runtime, only used by TypeScript to carry the result type. */
   readonly _resultType?: TResult;
 }

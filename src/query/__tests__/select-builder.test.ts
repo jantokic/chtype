@@ -62,6 +62,25 @@ describe('SelectBuilder', () => {
     expect(sql).toContain('HAVING total > {min:UInt32}');
   });
 
+  it('builds GROUP BY with array argument', () => {
+    const { sql } = qb
+      .selectFrom('users')
+      .select([qb.fn.count().as('total')])
+      .groupBy(['name', 'score'])
+      .compile();
+    expect(sql).toContain('GROUP BY name, score');
+  });
+
+  it('builds GROUP BY with array containing Expressions', () => {
+    const expr = fn.toStartOfDay('updated_at');
+    const { sql } = qb
+      .selectFrom('users')
+      .select([qb.fn.count().as('total')])
+      .groupBy([expr, 'name'])
+      .compile();
+    expect(sql).toContain('GROUP BY toStartOfDay(updated_at), name');
+  });
+
   it('builds HAVING with IS NOT NULL (unary)', () => {
     const { sql } = qb
       .selectFrom('users')
@@ -782,6 +801,44 @@ describe('SelectBuilder', () => {
           .compile();
       }).toThrow('Param name collision');
     });
+
+    it('deduplicates params with same name and type across CTEs', () => {
+      const cte1 = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('score', '>', qb.param('days', 'UInt32'));
+      const cte2 = qb
+        .selectFrom('events')
+        .select(['event_id'])
+        .where('type', '=', qb.param('days', 'UInt32'));
+      const { sql, params } = qb
+        .selectFrom('users')
+        .with('a', cte1)
+        .with('b', cte2)
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('WITH a AS');
+      expect(sql).toContain('b AS');
+      expect(params).toHaveProperty('days');
+    });
+
+    it('throws on param name collision across CTEs with different types', () => {
+      const cte1 = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('score', '>', qb.param('val', 'Float64'));
+      const cte2 = qb
+        .selectFrom('events')
+        .select(['event_id'])
+        .where('type', '=', qb.param('val', 'String'));
+      expect(() => {
+        qb.selectFrom('users')
+          .with('a', cte1)
+          .with('b', cte2)
+          .select(['user_id'])
+          .compile();
+      }).toThrow('Param name collision');
+    });
   });
 
   describe('qb.with() — CTE on QueryBuilder', () => {
@@ -882,6 +939,26 @@ describe('SelectBuilder', () => {
         .selectFrom('all_users')
         .compile();
       expect(sql).toContain('SELECT *\nFROM all_users');
+    });
+
+    it('deduplicates params with same name and type across qb.with() CTEs', () => {
+      const cte1 = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .where('score', '>', qb.param('days', 'UInt32'));
+      const cte2 = qb
+        .selectFrom('events')
+        .select(['event_id'])
+        .where('type', '=', qb.param('days', 'UInt32'));
+      const { sql, params } = qb
+        .with('a', cte1)
+        .with('b', cte2)
+        .selectFrom('a')
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('WITH a AS');
+      expect(sql).toContain('b AS');
+      expect(params).toHaveProperty('days');
     });
   });
 
