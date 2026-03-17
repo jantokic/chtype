@@ -176,12 +176,23 @@ describe('sql tagged template', () => {
       }).toThrow('Param name collision');
     });
 
-    it('throws on collision between two subqueries', () => {
+    it('deduplicates same name + same type between two subqueries', () => {
       const sub1 = qb.subquery(
         qb.selectFrom('events').select(['event_id']).where('type', '=', qb.param('val', 'String')),
       );
       const sub2 = qb.subquery(
         qb.selectFrom('users').select(['user_id']).where('name', '=', qb.param('val', 'String')),
+      );
+      const query = sql`SELECT * FROM t WHERE a IN ${sub1} AND b IN ${sub2}`;
+      expect(query.params).toHaveProperty('val');
+    });
+
+    it('throws on collision between two subqueries with different types', () => {
+      const sub1 = qb.subquery(
+        qb.selectFrom('events').select(['event_id']).where('type', '=', qb.param('val', 'String')),
+      );
+      const sub2 = qb.subquery(
+        qb.selectFrom('users').select(['user_id']).where('score', '>', qb.param('val', 'Float64')),
       );
       expect(() => {
         sql`SELECT * FROM t WHERE a IN ${sub1} AND b IN ${sub2}`;

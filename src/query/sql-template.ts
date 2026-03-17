@@ -54,22 +54,36 @@ export function sql<T extends SqlInterpolation[]>(
 ): CompiledQuery {
   const params: Record<string, unknown> = {};
   const registeredParams = new Set<string>();
+  const paramTypes = new Map<string, string>();
 
   function registerParam(p: Param): void {
     if (registeredParams.has(p.name)) {
+      const existingType = paramTypes.get(p.name);
+      if (existingType && existingType === p.type) {
+        return;
+      }
       throw new Error(`Param name collision: "${p.name}" is already used in this query`);
     }
     registeredParams.add(p.name);
+    paramTypes.set(p.name, p.type);
     params[p.name] = undefined;
   }
 
-  function mergeParams(source: Record<string, unknown>, label: string): void {
+  function mergeParams(source: Record<string, unknown>, label: string, sourceTypes?: Map<string, string>): void {
     for (const key of Object.keys(source)) {
       if (registeredParams.has(key)) {
+        const existingType = paramTypes.get(key);
+        const newType = sourceTypes?.get(key);
+        if (existingType && newType && existingType === newType) {
+          continue;
+        }
         throw new Error(`Param name collision: "${key}" is used in both the ${label} and outer query`);
       }
       registeredParams.add(key);
       params[key] = source[key];
+      if (sourceTypes?.has(key)) {
+        paramTypes.set(key, sourceTypes.get(key)!);
+      }
     }
   }
 
@@ -83,15 +97,16 @@ export function sql<T extends SqlInterpolation[]>(
       registerParam(value);
       sqlParts.push(value.toString(), nextString);
     } else if (value instanceof Subquery) {
-      mergeParams(value.subqueryParams, 'subquery');
+      mergeParams(value.subqueryParams, 'subquery', value.paramTypes);
       sqlParts.push(value.sql, nextString);
     } else if (value instanceof ConditionGroup) {
       for (const p of value.params) registerParam(p);
       sqlParts.push(value.toString(), nextString);
     } else if (value instanceof Expression) {
+      for (const p of value.params) registerParam(p);
       sqlParts.push(value.toString(), nextString);
     } else if (isCompiledQuery(value)) {
-      mergeParams(value.params, 'embedded query');
+      mergeParams(value.params, 'embedded query', (value as CompiledQuery).paramTypes);
       sqlParts.push(value.sql, nextString);
     } else {
       throw new Error('Unsupported interpolation type in sql template — use Param, Expression, Subquery, or CompiledQuery');

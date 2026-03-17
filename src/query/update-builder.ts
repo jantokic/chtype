@@ -124,7 +124,7 @@ export class UpdateBuilder<
     const conditions = this._wheres.map((w) => renderWhereClause(w, ctx));
     const sql = `ALTER TABLE ${table}${clusterClause} UPDATE ${setClauses.join(', ')} WHERE ${conditions.join(' AND ')}`;
 
-    return { sql, params: ctx.params };
+    return { sql, params: ctx.params, paramTypes: ctx.paramTypes };
   }
 }
 

@@ -16,32 +16,47 @@ export interface CompileContext {
   params: Record<string, unknown>;
   /** Param names that came from subqueries/CTEs (external sources). */
   externalParams: Set<string>;
+  /** Track param types for deduplication (same name + same type = deduplicate, different type = throw). */
+  paramTypes: Map<string, string>;
 }
 
 export function createCompileContext(): CompileContext {
-  return { params: {}, externalParams: new Set() };
+  return { params: {}, externalParams: new Set(), paramTypes: new Map() };
 }
 
-export function mergeParams(ctx: CompileContext, source: Record<string, unknown>): void {
+export function mergeParams(ctx: CompileContext, source: Record<string, unknown>, sourceTypes?: Map<string, string>): void {
   for (const key of Object.keys(source)) {
     if (key in ctx.params) {
+      const existingType = ctx.paramTypes.get(key);
+      const newType = sourceTypes?.get(key);
+      if (existingType && newType && existingType === newType) {
+        continue;
+      }
       throw new Error(`Param name collision: "${key}" is used in both the subquery/CTE and outer query`);
     }
     ctx.params[key] = source[key];
     ctx.externalParams.add(key);
+    if (sourceTypes?.has(key)) {
+      ctx.paramTypes.set(key, sourceTypes.get(key)!);
+    }
   }
 }
 
 export function renderValue(value: number | Param | Expression, ctx: CompileContext): string {
   if (value instanceof Subquery) {
-    mergeParams(ctx, value.subqueryParams);
+    mergeParams(ctx, value.subqueryParams, value.paramTypes);
     return value.sql;
   }
   if (value instanceof Param) {
     if (ctx.externalParams.has(value.name)) {
+      const existingType = ctx.paramTypes.get(value.name);
+      if (existingType && existingType === value.type) {
+        return value.toString();
+      }
       throw new Error(`Param name collision: "${value.name}" is used in both the subquery/CTE and outer query`);
     }
     ctx.params[value.name] = undefined;
+    ctx.paramTypes.set(value.name, value.type);
     return value.toString();
   }
   if (value instanceof Expression) {
@@ -71,9 +86,14 @@ export function renderWhereClause(w: WhereClause, ctx: CompileContext): string {
 export function registerExpressionParams(expr: Expression, ctx: CompileContext): void {
   for (const p of expr.params) {
     if (ctx.externalParams.has(p.name)) {
+      const existingType = ctx.paramTypes.get(p.name);
+      if (existingType && existingType === p.type) {
+        continue;
+      }
       throw new Error(`Param name collision: "${p.name}" is used in both the subquery/CTE and outer query`);
     }
     ctx.params[p.name] = undefined;
+    ctx.paramTypes.set(p.name, p.type);
   }
 }
 
