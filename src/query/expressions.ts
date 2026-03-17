@@ -13,8 +13,8 @@ export class Expression<TType = unknown> {
     this.params = params ?? [];
   }
 
-  as<A extends string, T = TType>(alias: A): Expression<T> & { alias: A } {
-    return new Expression<T>(this.sql, alias, this.params) as Expression<T> & { alias: A };
+  as<A extends string>(alias: A): Expression<TType> & { alias: A } {
+    return new Expression<TType>(this.sql, alias, this.params) as Expression<TType> & { alias: A };
   }
 
   toString(): string {
@@ -95,23 +95,23 @@ export const fn = {
     }
     return new Expression(`argMin(${column}, ${ver})`);
   },
-  count(column?: string): Expression {
-    return new Expression(column ? `count(${column})` : 'count()');
+  count(column?: string): Expression<number> {
+    return new Expression<number>(column ? `count(${column})` : 'count()');
   },
-  countDistinct(column: string): Expression {
-    return new Expression(`count(DISTINCT ${column})`);
+  countDistinct(column: string): Expression<number> {
+    return new Expression<number>(`count(DISTINCT ${column})`);
   },
-  sum(column: string): Expression {
-    return new Expression(`sum(${column})`);
+  sum(column: string): Expression<number> {
+    return new Expression<number>(`sum(${column})`);
   },
-  avg(column: string): Expression {
-    return new Expression(`avg(${column})`);
+  avg(column: string): Expression<number> {
+    return new Expression<number>(`avg(${column})`);
   },
-  min(column: string): Expression {
-    return new Expression(`min(${column})`);
+  min(column: string): Expression<number> {
+    return new Expression<number>(`min(${column})`);
   },
-  max(column: string): Expression {
-    return new Expression(`max(${column})`);
+  max(column: string): Expression<number> {
+    return new Expression<number>(`max(${column})`);
   },
   groupArray(column: string): Expression {
     return new Expression(`groupArray(${column})`);
@@ -119,11 +119,11 @@ export const fn = {
   arrayJoin(column: string): Expression {
     return new Expression(`arrayJoin(${column})`);
   },
-  uniq(column: string): Expression {
-    return new Expression(`uniq(${column})`);
+  uniq(column: string): Expression<number> {
+    return new Expression<number>(`uniq(${column})`);
   },
-  uniqExact(column: string): Expression {
-    return new Expression(`uniqExact(${column})`);
+  uniqExact(column: string): Expression<number> {
+    return new Expression<number>(`uniqExact(${column})`);
   },
   toStartOfDay(column: string): Expression {
     return new Expression(`toStartOfDay(${column})`);
@@ -164,8 +164,8 @@ export const fn = {
     const args = length !== undefined ? `${column}, ${offset}, ${length}` : `${column}, ${offset}`;
     return new Expression(`arraySlice(${args})`);
   },
-  length(column: string): Expression {
-    return new Expression(`length(${column})`);
+  length(column: string): Expression<number> {
+    return new Expression<number>(`length(${column})`);
   },
   has(column: string, element: string): Expression {
     return new Expression(`has(${column}, ${element})`);
@@ -212,36 +212,36 @@ export const fn = {
   toDateTime(column: string): Expression {
     return new Expression(`toDateTime(${column})`);
   },
-  now(): Expression {
-    return new Expression('now()');
+  now(): Expression<string> {
+    return new Expression<string>('now()');
   },
-  now64(precision?: number): Expression {
-    return new Expression(precision !== undefined ? `now64(${precision})` : 'now64()');
+  now64(precision?: number): Expression<string> {
+    return new Expression<string>(precision !== undefined ? `now64(${precision})` : 'now64()');
   },
-  today(): Expression {
-    return new Expression('today()');
+  today(): Expression<string> {
+    return new Expression<string>('today()');
   },
-  dateDiff(unit: string, start: string, end: string): Expression {
-    return new Expression(`dateDiff('${unit}', ${start}, ${end})`);
+  dateDiff(unit: string, start: string, end: string): Expression<number> {
+    return new Expression<number>(`dateDiff('${unit}', ${start}, ${end})`);
   },
 
   // --- String functions ---
 
-  lower(column: string): Expression {
-    return new Expression(`lower(${column})`);
+  lower(column: string): Expression<string> {
+    return new Expression<string>(`lower(${column})`);
   },
-  upper(column: string): Expression {
-    return new Expression(`upper(${column})`);
+  upper(column: string): Expression<string> {
+    return new Expression<string>(`upper(${column})`);
   },
-  trim(column: string): Expression {
-    return new Expression(`trimBoth(${column})`);
+  trim(column: string): Expression<string> {
+    return new Expression<string>(`trimBoth(${column})`);
   },
-  concat(...columns: string[]): Expression {
-    return new Expression(`concat(${columns.join(', ')})`);
+  concat(...columns: string[]): Expression<string> {
+    return new Expression<string>(`concat(${columns.join(', ')})`);
   },
-  substring(column: string, offset: number, length?: number): Expression {
+  substring(column: string, offset: number, length?: number): Expression<string> {
     const args = length !== undefined ? `${column}, ${offset}, ${length}` : `${column}, ${offset}`;
-    return new Expression(`substring(${args})`);
+    return new Expression<string>(`substring(${args})`);
   },
 
   // --- Conditional ---
@@ -296,11 +296,11 @@ export const fn = {
 
   // --- Aggregate (additional) ---
 
-  quantile(level: number, column: string): Expression {
-    return new Expression(`quantile(${level})(${column})`);
+  quantile(level: number, column: string): Expression<number> {
+    return new Expression<number>(`quantile(${level})(${column})`);
   },
-  median(column: string): Expression {
-    return new Expression(`median(${column})`);
+  median(column: string): Expression<number> {
+    return new Expression<number>(`median(${column})`);
   },
   any(column: string): Expression {
     return new Expression(`any(${column})`);
@@ -308,23 +308,23 @@ export const fn = {
   anyLast(column: string): Expression {
     return new Expression(`anyLast(${column})`);
   },
-  sumIf(column: string, condition: string | Expression): Expression {
+  sumIf(column: string, condition: string | Expression): Expression<number> {
     if (condition instanceof Expression) {
-      return new Expression(`sumIf(${column}, ${condition.sql})`, undefined, [...condition.params]);
+      return new Expression<number>(`sumIf(${column}, ${condition.sql})`, undefined, [...condition.params]);
     }
-    return new Expression(`sumIf(${column}, ${condition})`);
+    return new Expression<number>(`sumIf(${column}, ${condition})`);
   },
-  countIf(condition: string | Expression): Expression {
+  countIf(condition: string | Expression): Expression<number> {
     if (condition instanceof Expression) {
-      return new Expression(`countIf(${condition.sql})`, undefined, [...condition.params]);
+      return new Expression<number>(`countIf(${condition.sql})`, undefined, [...condition.params]);
     }
-    return new Expression(`countIf(${condition})`);
+    return new Expression<number>(`countIf(${condition})`);
   },
-  avgIf(column: string, condition: string | Expression): Expression {
+  avgIf(column: string, condition: string | Expression): Expression<number> {
     if (condition instanceof Expression) {
-      return new Expression(`avgIf(${column}, ${condition.sql})`, undefined, [...condition.params]);
+      return new Expression<number>(`avgIf(${column}, ${condition.sql})`, undefined, [...condition.params]);
     }
-    return new Expression(`avgIf(${column}, ${condition})`);
+    return new Expression<number>(`avgIf(${column}, ${condition})`);
   },
   argMaxIf(column: string | Expression, versionColumn: string | string[], condition: Expression): Expression {
     const ver = Array.isArray(versionColumn) ? `(${versionColumn.join(', ')})` : versionColumn;
@@ -341,50 +341,50 @@ export const fn = {
 
   // --- Aggregate -State combinators (for writing to AggregatingMergeTree) ---
 
-  sumState(column: string): Expression {
-    return new Expression(`sumState(${column})`);
+  sumState(column: string): Expression<number> {
+    return new Expression<number>(`sumState(${column})`);
   },
-  countState(column?: string): Expression {
-    return new Expression(column ? `countState(${column})` : 'countState()');
+  countState(column?: string): Expression<number> {
+    return new Expression<number>(column ? `countState(${column})` : 'countState()');
   },
-  avgState(column: string): Expression {
-    return new Expression(`avgState(${column})`);
+  avgState(column: string): Expression<number> {
+    return new Expression<number>(`avgState(${column})`);
   },
-  minState(column: string): Expression {
-    return new Expression(`minState(${column})`);
+  minState(column: string): Expression<number> {
+    return new Expression<number>(`minState(${column})`);
   },
-  maxState(column: string): Expression {
-    return new Expression(`maxState(${column})`);
+  maxState(column: string): Expression<number> {
+    return new Expression<number>(`maxState(${column})`);
   },
-  uniqState(column: string): Expression {
-    return new Expression(`uniqState(${column})`);
+  uniqState(column: string): Expression<number> {
+    return new Expression<number>(`uniqState(${column})`);
   },
   anyState(column: string): Expression {
     return new Expression(`anyState(${column})`);
   },
-  quantileState(level: number, column: string): Expression {
-    return new Expression(`quantileState(${level})(${column})`);
+  quantileState(level: number, column: string): Expression<number> {
+    return new Expression<number>(`quantileState(${level})(${column})`);
   },
 
   // --- Aggregate -Merge combinators (for reading from AggregatingMergeTree) ---
 
-  sumMerge(column: string): Expression {
-    return new Expression(`sumMerge(${column})`);
+  sumMerge(column: string): Expression<number> {
+    return new Expression<number>(`sumMerge(${column})`);
   },
-  countMerge(column: string): Expression {
-    return new Expression(`countMerge(${column})`);
+  countMerge(column: string): Expression<number> {
+    return new Expression<number>(`countMerge(${column})`);
   },
-  avgMerge(column: string): Expression {
-    return new Expression(`avgMerge(${column})`);
+  avgMerge(column: string): Expression<number> {
+    return new Expression<number>(`avgMerge(${column})`);
   },
-  minMerge(column: string): Expression {
-    return new Expression(`minMerge(${column})`);
+  minMerge(column: string): Expression<number> {
+    return new Expression<number>(`minMerge(${column})`);
   },
-  maxMerge(column: string): Expression {
-    return new Expression(`maxMerge(${column})`);
+  maxMerge(column: string): Expression<number> {
+    return new Expression<number>(`maxMerge(${column})`);
   },
-  uniqMerge(column: string): Expression {
-    return new Expression(`uniqMerge(${column})`);
+  uniqMerge(column: string): Expression<number> {
+    return new Expression<number>(`uniqMerge(${column})`);
   },
   anyMerge(column: string): Expression {
     return new Expression(`anyMerge(${column})`);
