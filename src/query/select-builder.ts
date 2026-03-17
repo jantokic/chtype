@@ -65,6 +65,7 @@ export class SelectBuilder<
   DB extends DatabaseSchema,
   T extends TableName<DB> = TableName<DB>,
   TSelected extends string = string,
+  TExprTypes extends Record<string, unknown> = Record<string, never>,
 > {
   private _table: T;
   private _tableAlias?: string;
@@ -141,11 +142,15 @@ export class SelectBuilder<
     return this;
   }
 
-  select<C extends ColumnName<DB, T>, E extends Expression & { alias: string }>(
+  select<C extends ColumnName<DB, T>, E extends Expression<any> & { alias: string }>(
     columns: (C | E | Expression)[],
-  ): SelectBuilder<DB, T, C | (E extends { alias: infer A extends string } ? A : never)> {
+  ): SelectBuilder<
+    DB, T,
+    C | (E extends { alias: infer A extends string } ? A : never),
+    { [K in E as K extends { alias: infer A extends string } ? A : never]: K extends Expression<infer V> ? (unknown extends V ? unknown : V) : unknown }
+  > {
     this._columns = columns;
-    return this as unknown as SelectBuilder<DB, T, C | (E extends { alias: infer A extends string } ? A : never)>;
+    return this as any;
   }
 
   /** Add a WHERE condition. Values must be Param or Expression — no raw strings. */
@@ -322,7 +327,7 @@ export class SelectBuilder<
     return this;
   }
 
-  compile(): CompiledQuery<string extends TSelected ? RowType<DB, T> : SelectResult<DB, T, TSelected>> {
+  compile(): CompiledQuery<string extends TSelected ? RowType<DB, T> : SelectResult<DB, T, TSelected, TExprTypes>> {
     const ctx = createCompileContext();
     const parts: string[] = [];
 

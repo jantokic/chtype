@@ -26,12 +26,18 @@ export interface CompiledQuery<TResult = Record<string, unknown>> {
   readonly _resultType?: TResult;
 }
 
-/** Compute the result row type from selected columns and expressions. */
-export type SelectResult<DB extends DatabaseSchema, T extends TableName<DB>, TSelected extends string> =
+/** Compute the result row type from selected columns and typed expression aliases. */
+export type SelectResult<
+  DB extends DatabaseSchema,
+  T extends TableName<DB>,
+  TSelected extends string,
+  TExprTypes extends Record<string, unknown> = Record<string, never>,
+> =
   string extends TSelected
     ? Record<string, unknown>
     : Pick<RowType<DB, T>, TSelected & keyof RowType<DB, T>>
-      & Record<Exclude<TSelected, keyof RowType<DB, T>>, unknown>;
+      & { [K in keyof TExprTypes & TSelected]: TExprTypes[K] }
+      & Record<Exclude<TSelected, keyof RowType<DB, T> | keyof TExprTypes>, unknown>;
 
 export type SortDirection = 'ASC' | 'DESC';
 
