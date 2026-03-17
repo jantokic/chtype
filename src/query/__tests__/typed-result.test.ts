@@ -167,15 +167,15 @@ describe('Typed result inference', () => {
     expect(expr.alias).toBe('total');
   });
 
-  test('Expression.as<T>() type hint propagates through select → compile', () => {
+  test('fn.sum/count/avg automatically infer number type through .as()', () => {
     const query = qb
       .selectFrom('users')
-      .select(['user_id', qb.fn.sum('score').as<number>('total_score')])
+      .select(['user_id', qb.fn.sum('score').as('total_score')])
       .compile();
 
     expect(query.sql).toContain('sum(score) AS total_score');
 
-    // Type-level: total_score should be number (from .as<number>()), not unknown
+    // Type-level: total_score should be number automatically (fn.sum returns Expression<number>)
     type Result = typeof query extends CompiledQuery<infer R> ? R : never;
     const _check: AssertAssignable<Result, { user_id: string; total_score: number }> = true;
     const _check2: AssertAssignable<{ user_id: string; total_score: number }, Result> = true;
@@ -183,19 +183,30 @@ describe('Typed result inference', () => {
     expect(_check2).toBe(true);
   });
 
-  test('Mixed typed and untyped expression aliases', () => {
+  test('Multiple typed aggregates infer correctly', () => {
     const query = qb
       .selectFrom('users')
       .select([
-        qb.fn.count().as<number>('total'),
-        qb.fn.avg('score').as('avg_score'),  // no type hint → unknown
+        qb.fn.count().as('total'),
+        qb.fn.avg('score').as('avg_score'),
       ])
       .compile();
 
     type Result = typeof query extends CompiledQuery<infer R> ? R : never;
     const _checkTotal: AssertAssignable<Result['total'], number> = true;
-    const _checkAvg: AssertAssignable<Result['avg_score'], unknown> = true;
+    const _checkAvg: AssertAssignable<Result['avg_score'], number> = true;
     expect(_checkTotal).toBe(true);
     expect(_checkAvg).toBe(true);
+  });
+
+  test('fn.raw() still infers unknown', () => {
+    const query = qb
+      .selectFrom('users')
+      .select([qb.fn.raw('custom_func(x)').as('val')])
+      .compile();
+
+    type Result = typeof query extends CompiledQuery<infer R> ? R : never;
+    const _check: AssertAssignable<Result['val'], unknown> = true;
+    expect(_check).toBe(true);
   });
 });
