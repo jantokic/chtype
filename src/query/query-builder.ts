@@ -32,7 +32,7 @@ export interface QueryBuilder<DB extends DatabaseSchema> {
   /** Start a CTE chain. CTE column types are inferred from the inner query. */
   with<N extends string, B extends Subquery | { compile(): CompiledQuery<unknown> }>(
     name: N,
-    builder: B,
+    builder: B | ((db: QueryBuilder<DB>) => B),
   ): WithBuilder<DB & Record<N, CteSchema<InferResult<B>>>>;
   /** INSERT INTO target SELECT ... — atomic insert-from-select. */
   insertFrom(table: string, selectQuery: { compile(): CompiledQuery<unknown> }): { compile(): CompiledQuery };
@@ -48,7 +48,7 @@ export interface WithBuilder<DB extends DatabaseSchema> {
   /** Add another CTE to the chain. */
   with<N extends string, B extends Subquery | { compile(): CompiledQuery<unknown> }>(
     name: N,
-    builder: B,
+    builder: B | ((db: QueryBuilder<DB>) => B),
   ): WithBuilder<DB & Record<N, CteSchema<InferResult<B>>>>;
   /** Select from a table or CTE name. CTEs defined via with() are valid table names. */
   selectFrom<T extends TableName<DB>>(table: T): SelectBuilder<DB, T>;
@@ -93,9 +93,10 @@ export function createQueryBuilder<DB extends DatabaseSchema>(): QueryBuilder<DB
     },
     with(
       name: string,
-      builder: Subquery | { compile(): CompiledQuery<unknown> },
+      builder: Subquery | { compile(): CompiledQuery<unknown> } | ((db: QueryBuilder<DB>) => Subquery | { compile(): CompiledQuery<unknown> }),
     ) {
-      return createWithBuilder(name, builder, []);
+      const resolved = typeof builder === 'function' ? builder(createQueryBuilder<DB>()) : builder;
+      return createWithBuilder(name, resolved, []);
     },
     insertFrom(table: string, selectQuery: { compile(): CompiledQuery<unknown> }) {
       if (!VALID_IDENTIFIER.test(table)) {
@@ -154,9 +155,10 @@ function createWithBuilder<DB extends DatabaseSchema>(
   return {
     with(
       nextName: string,
-      nextBuilder: Subquery | { compile(): CompiledQuery<unknown> },
+      nextBuilder: Subquery | { compile(): CompiledQuery<unknown> } | ((db: QueryBuilder<DB>) => Subquery | { compile(): CompiledQuery<unknown> }),
     ) {
-      return createWithBuilder(nextName, nextBuilder, ctes);
+      const resolved = typeof nextBuilder === 'function' ? nextBuilder(createQueryBuilder<DB>()) : nextBuilder;
+      return createWithBuilder(nextName, resolved, ctes);
     },
     selectFrom<T extends TableName<DB>>(table: T): SelectBuilder<DB, T> {
       const sb = new SelectBuilder<DB, T>(table);

@@ -1162,4 +1162,105 @@ describe('SelectBuilder', () => {
       }).toThrow('Invalid table name');
     });
   });
+
+  describe('CTE callback API', () => {
+    it('callback references earlier CTE', () => {
+      const cte1 = qb.selectFrom('users').select(['user_id', 'name']);
+      const { sql } = qb
+        .with('active_users', cte1)
+        .with('names', (db) => db.selectFrom('active_users').select(['name']))
+        .selectFrom('names')
+        .select(['name'])
+        .compile();
+      expect(sql).toContain('WITH active_users AS (SELECT user_id, name\nFROM users)');
+      expect(sql).toContain('names AS (SELECT name\nFROM active_users)');
+      expect(sql).toContain('SELECT name\nFROM names');
+    });
+
+    it('multiple chained CTE callbacks', () => {
+      const { sql } = qb
+        .with('step1', qb.selectFrom('events').select(['event_id', 'type']))
+        .with('step2', (db) => db.selectFrom('step1').select(['event_id']))
+        .with('step3', (db) => db.selectFrom('step2').select(['event_id']))
+        .selectFrom('step3')
+        .select(['event_id'])
+        .compile();
+      expect(sql).toContain('step1 AS (SELECT event_id, type\nFROM events)');
+      expect(sql).toContain('step2 AS (SELECT event_id\nFROM step1)');
+      expect(sql).toContain('step3 AS (SELECT event_id\nFROM step2)');
+      expect(sql).toContain('SELECT event_id\nFROM step3');
+    });
+
+    it('mixed: some CTEs as direct queries, some as callbacks', () => {
+      const directCte = qb.selectFrom('users').select(['user_id', 'score']);
+      const { sql } = qb
+        .with('scored', directCte)
+        .with('high_scores', (db) =>
+          db.selectFrom('scored').select(['user_id']).where('score', '>', qb.param('min', 'Float64')),
+        )
+        .selectFrom('high_scores')
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('scored AS (SELECT user_id, score\nFROM users)');
+      expect(sql).toContain('high_scores AS (SELECT user_id\nFROM scored\nWHERE score > {min:Float64})');
+      expect(sql).toContain('SELECT user_id\nFROM high_scores');
+    });
+
+    it('existing .with(name, builder) still works (backwards compat)', () => {
+      const inner = qb.selectFrom('users').select(['user_id']);
+      const { sql } = qb
+        .with('cte', inner)
+        .selectFrom('cte')
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('WITH cte AS (SELECT user_id\nFROM users)');
+      expect(sql).toContain('FROM cte');
+    });
+
+    it('callback on qb.with() (first CTE)', () => {
+      const { sql } = qb
+        .with('first', (db) => db.selectFrom('users').select(['user_id']))
+        .selectFrom('first')
+        .select(['user_id'])
+        .compile();
+      expect(sql).toContain('WITH first AS (SELECT user_id\nFROM users)');
+      expect(sql).toContain('FROM first');
+    });
+
+    it('CTE callback merges params', () => {
+      const { sql, params } = qb
+        .with('filtered', (db) =>
+          db.selectFrom('users').select(['user_id']).where('score', '>', qb.param('min', 'Float64')),
+        )
+        .selectFrom('filtered')
+        .select(['user_id'])
+        .where('user_id', '!=', qb.param('excludeId', 'String'))
+        .compile();
+      expect(params).toHaveProperty('min');
+      expect(params).toHaveProperty('excludeId');
+      expect(sql).toContain('WHERE score > {min:Float64}');
+      expect(sql).toContain('WHERE user_id != {excludeId:String}');
+    });
+  });
+
+  describe('orderBy with string alias', () => {
+    it('accepts arbitrary string alias in orderBy', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select([fn.count().as('total')])
+        .groupBy('name')
+        .orderBy('total', 'DESC')
+        .compile();
+      expect(sql).toContain('ORDER BY total DESC');
+    });
+
+    it('accepts Expression in orderBy', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .orderBy(fn.raw('score + 1'), 'ASC')
+        .compile();
+      expect(sql).toContain('ORDER BY score + 1 ASC');
+    });
+  });
 });

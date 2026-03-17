@@ -178,8 +178,32 @@ describe('fn — function helpers', () => {
         .toBe("multiIf(x > 10, 'high', x > 5, 'mid', 'low')");
     });
 
-    it('coalesce', () => {
+    it('coalesce with strings', () => {
       expect(fn.coalesce('a', 'b', 'c').sql).toBe('coalesce(a, b, c)');
+    });
+
+    it('coalesce with mixed string and number', () => {
+      expect(fn.coalesce('p.col', 0).sql).toBe('coalesce(p.col, 0)');
+    });
+
+    it('coalesce with Expression', () => {
+      expect(fn.coalesce('a', 'b', fn.raw('default')).sql).toBe('coalesce(a, b, default)');
+    });
+
+    it('coalesce with Param', () => {
+      const p = new Param('def', 'UInt32');
+      const expr = fn.coalesce('col', p);
+      expect(expr.sql).toBe('coalesce(col, {def:UInt32})');
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('def');
+    });
+
+    it('coalesce propagates params from Expression args', () => {
+      const p = new Param('n', 'UInt32');
+      const inner = fn.raw('INTERVAL ', p, ' DAY');
+      const expr = fn.coalesce('col', inner, 0);
+      expect(expr.params).toHaveLength(1);
+      expect(expr.params[0]!.name).toBe('n');
     });
   });
 
