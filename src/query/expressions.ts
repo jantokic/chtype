@@ -252,8 +252,19 @@ export const fn = {
   multiIf(...args: string[]): Expression {
     return new Expression(`multiIf(${args.join(', ')})`);
   },
-  coalesce(...columns: string[]): Expression {
-    return new Expression(`coalesce(${columns.join(', ')})`);
+  coalesce(...args: (string | number | Expression | Param)[]): Expression {
+    const params: Param[] = [];
+    const parts = args.map((a) => {
+      if (typeof a === 'number') return String(a);
+      if (typeof a === 'string') return a;
+      if (a instanceof Param) {
+        params.push(a);
+        return a.toString();
+      }
+      params.push(...a.params);
+      return a.sql;
+    });
+    return new Expression(`coalesce(${parts.join(', ')})`, undefined, params);
   },
   ifNull(col: string, defaultValue: string | number | Param | Expression): Expression {
     if (defaultValue instanceof Param) {
