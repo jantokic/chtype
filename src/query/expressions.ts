@@ -3,6 +3,7 @@ import { Param } from './param.js';
 
 /** Represents a raw SQL expression with an optional alias. TType carries the result type for typed expressions. */
 export class Expression<TType = unknown> {
+  declare readonly _type: TType;
   readonly params: Param[];
 
   constructor(
