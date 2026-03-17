@@ -23,6 +23,24 @@ import type {
 } from './types.js';
 import { Expression, Subquery } from './expressions.js';
 import { Param } from './param.js';
+
+type InferExprTypes<T extends readonly unknown[]> =
+  T extends readonly [infer Head, ...infer Tail]
+    ? (Head extends Expression<infer V> & { alias: infer A extends string }
+        ? Record<A, unknown extends V ? unknown : V>
+        : {})
+      & InferExprTypes<Tail>
+    : {};
+
+type StringsIn<T extends readonly unknown[]> =
+  T extends readonly [infer Head, ...infer Tail]
+    ? (Head extends string ? Head : never) | StringsIn<Tail>
+    : never;
+
+type AliasesIn<T extends readonly unknown[]> =
+  T extends readonly [infer Head, ...infer Tail]
+    ? (Head extends { alias: infer A extends string } ? A : never) | AliasesIn<Tail>
+    : never;
 import {
   type WhereClause,
   buildWhereClause,
@@ -142,14 +160,14 @@ export class SelectBuilder<
     return this;
   }
 
-  select<C extends ColumnName<DB, T>, E extends Expression<any> & { alias: string }>(
-    columns: (C | E | Expression)[],
+  select<const Cols extends readonly (ColumnName<DB, T> | Expression<any>)[]>(
+    columns: [...Cols],
   ): SelectBuilder<
     DB, T,
-    C | (E extends { alias: infer A extends string } ? A : never),
-    { [K in E as K extends { alias: infer A extends string } ? A : never]: K extends Expression<infer V> ? (unknown extends V ? unknown : V) : unknown }
+    StringsIn<Cols> | AliasesIn<Cols>,
+    InferExprTypes<Cols>
   > {
-    this._columns = columns;
+    this._columns = columns as unknown as (string | Expression)[];
     return this as any;
   }
 
