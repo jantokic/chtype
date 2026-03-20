@@ -1263,4 +1263,98 @@ describe('SelectBuilder', () => {
       expect(sql).toContain('ORDER BY score + 1 ASC');
     });
   });
+
+  describe('wrap', () => {
+    it('wraps query in SELECT * FROM (...)', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .wrap()
+        .compile();
+      expect(sql).toBe('SELECT *\nFROM (SELECT user_id, name\nFROM users)');
+    });
+
+    it('supports WHERE on wrapped query', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id', fn.argMax('score', 'updated_at').as('score')])
+        .groupBy('user_id')
+        .wrap()
+        .where('score', '>=', qb.param('minScore', 'Float64'))
+        .compile();
+      expect(sql).toContain('FROM (SELECT user_id, argMax(score, updated_at) AS score\nFROM users\nGROUP BY user_id)');
+      expect(sql).toContain('WHERE score >= {minScore:Float64}');
+    });
+
+    it('supports ORDER BY + LIMIT on wrapped query', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id', fn.argMax('score', 'updated_at').as('score')])
+        .groupBy('user_id')
+        .wrap()
+        .orderBy('score', 'DESC')
+        .limit(10)
+        .compile();
+      expect(sql).toContain('ORDER BY score DESC');
+      expect(sql).toContain('LIMIT 10');
+    });
+
+    it('carries params from inner query', () => {
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .where('score', '>', qb.param('minScore', 'Float64'))
+        .wrap()
+        .where('name', '!=', qb.param('excludeName', 'String'))
+        .compile();
+      expect(params).toHaveProperty('minScore');
+      expect(params).toHaveProperty('excludeName');
+      expect(sql).toContain('{minScore:Float64}');
+      expect(sql).toContain('{excludeName:String}');
+    });
+
+    it('full argMax dedup pattern', () => {
+      const { sql, params } = qb
+        .selectFrom('users')
+        .select([
+          'user_id',
+          fn.argMax('name', 'updated_at').as('name'),
+          fn.argMax('score', 'updated_at').as('score'),
+        ])
+        .groupBy('user_id')
+        .wrap()
+        .where('score', '>=', qb.param('minScore', 'Float64'))
+        .orderBy('score', 'DESC')
+        .limit(100)
+        .compile();
+      expect(sql).toContain('SELECT *');
+      expect(sql).toContain('FROM (SELECT user_id, argMax(name, updated_at) AS name, argMax(score, updated_at) AS score\nFROM users\nGROUP BY user_id)');
+      expect(sql).toContain('WHERE score >= {minScore:Float64}');
+      expect(sql).toContain('ORDER BY score DESC');
+      expect(sql).toContain('LIMIT 100');
+      expect(params).toHaveProperty('minScore');
+    });
+
+    it('deduplicates params with same name and type across inner and outer', () => {
+      const { params } = qb
+        .selectFrom('users')
+        .select(['user_id', 'name'])
+        .where('score', '>', qb.param('val', 'Float64'))
+        .wrap()
+        .where('name', '!=', qb.param('val', 'Float64'))
+        .compile();
+      expect(params).toHaveProperty('val');
+    });
+
+    it('throws on param collision with different types', () => {
+      expect(() => {
+        qb.selectFrom('users')
+          .select(['user_id', 'name'])
+          .where('score', '>', qb.param('val', 'Float64'))
+          .wrap()
+          .where('name', '!=', qb.param('val', 'String'))
+          .compile();
+      }).toThrow('Param name collision');
+    });
+  });
 });

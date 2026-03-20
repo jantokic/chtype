@@ -41,6 +41,22 @@ type AliasesIn<T extends readonly unknown[]> =
   T extends readonly [infer Head, ...infer Tail]
     ? (Head extends { alias: infer A extends string } ? A : never) | AliasesIn<Tail>
     : never;
+
+type InnerResult<
+  DB extends DatabaseSchema,
+  T extends TableName<DB>,
+  TSelected extends string,
+  TExprTypes extends Record<string, unknown>,
+> = string extends TSelected ? RowType<DB, T> : SelectResult<DB, T, TSelected, TExprTypes>;
+
+type WrappedDB<TResult> = {
+  __wrapped: {
+    row: TResult;
+    insert: Record<string, unknown>;
+    engine: 'subquery';
+    versionColumn: null;
+  };
+};
 import {
   type WhereClause,
   buildWhereClause,
@@ -103,6 +119,8 @@ export class SelectBuilder<
   private _sample: number | null = null;
   private _sampleOffset: number | null = null;
   private _settings: Record<string, string | number | boolean> = {};
+  private _inheritedParams?: Record<string, unknown>;
+  private _inheritedParamTypes?: Map<string, string>;
 
   constructor(table: T) {
     this._table = table;
@@ -345,11 +363,28 @@ export class SelectBuilder<
     return this;
   }
 
+  wrap(): SelectBuilder<
+    WrappedDB<InnerResult<DB, T, TSelected, TExprTypes>>,
+    '__wrapped'
+  > {
+    const compiled = this.compile();
+    const outer = new SelectBuilder<
+      WrappedDB<InnerResult<DB, T, TSelected, TExprTypes>>,
+      '__wrapped'
+    >(`(${compiled.sql})` as '__wrapped');
+    outer._inheritedParams = compiled.params;
+    outer._inheritedParamTypes = compiled.paramTypes;
+    return outer;
+  }
+
   compile(): CompiledQuery<string extends TSelected ? RowType<DB, T> : SelectResult<DB, T, TSelected, TExprTypes>> {
     const ctx = createCompileContext();
-    const parts: string[] = [];
 
-    // WITH (CTE) clauses
+    if (this._inheritedParams) {
+      mergeParams(ctx, this._inheritedParams, this._inheritedParamTypes);
+    }
+
+    const parts: string[] = [];
     if (this._ctes.length > 0) {
       const cteParts = this._ctes.map((cte) => {
         mergeParams(ctx, cte.subquery.subqueryParams, cte.subquery.paramTypes);
