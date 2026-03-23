@@ -916,7 +916,7 @@ describe('SelectBuilder', () => {
         .compile();
       expect(sql).toContain('SELECT user_id, name\nFROM latest');
       expect(sql).toContain('WHERE user_id != {excludeId:String}');
-      expect(sql).toContain('ORDER BY name ASC');
+      expect(sql).toContain('ORDER BY name');
     });
 
     it('CTE column inference works with WHERE and ORDER BY', () => {
@@ -1261,6 +1261,16 @@ describe('SelectBuilder', () => {
         .orderBy(fn.raw('score + 1'), 'ASC')
         .compile();
       expect(sql).toContain('ORDER BY score + 1 ASC');
+    });
+
+    it('omits direction when not provided', () => {
+      const { sql } = qb
+        .selectFrom('users')
+        .select(['user_id'])
+        .orderBy(fn.raw('volume_change_abs DESC NULLS LAST'))
+        .compile();
+      expect(sql).toContain('ORDER BY volume_change_abs DESC NULLS LAST');
+      expect(sql).not.toContain('ASC');
     });
   });
 

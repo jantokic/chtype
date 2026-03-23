@@ -87,7 +87,7 @@ interface JoinClause {
 
 interface OrderByClause {
   expr: string;
-  direction: SortDirection;
+  direction?: SortDirection;
 }
 
 interface CteClause {
@@ -344,7 +344,7 @@ export class SelectBuilder<
     return this;
   }
 
-  orderBy(column: ColumnName<DB, T> | Expression | string, direction: SortDirection = 'ASC'): this {
+  orderBy(column: ColumnName<DB, T> | Expression | string, direction?: SortDirection): this {
     const expr = column instanceof Expression ? column.sql : column;
     this._orderBys.push({ expr, direction });
     return this;
@@ -486,7 +486,7 @@ export class SelectBuilder<
     }
 
     if (this._orderBys.length > 0) {
-      const clauses = this._orderBys.map((o) => `${o.expr} ${o.direction}`);
+      const clauses = this._orderBys.map((o) => o.direction ? `${o.expr} ${o.direction}` : o.expr);
       parts.push(`ORDER BY ${clauses.join(', ')}`);
     }
 
