@@ -118,6 +118,7 @@ export class SelectBuilder<
   private _final = false;
   private _sample: number | null = null;
   private _sampleOffset: number | null = null;
+  private _arrayJoins: { expr: string; alias?: string; left?: boolean; params: Param[] }[] = [];
   private _settings: Record<string, string | number | boolean> = {};
   private _inheritedParams?: Record<string, unknown>;
   private _inheritedParamTypes?: Map<string, string>;
@@ -229,9 +230,17 @@ export class SelectBuilder<
     column: ColumnName<DB, T> | Expression | string,
     op: WhereOp,
     value?: Param | Expression | [Param | Expression, Param | Expression],
+  ): this;
+  /** Conditionally add a pre-built condition group — only applied when `condition` is truthy. */
+  whereIf(condition: unknown, expr: Expression): this;
+  whereIf(
+    condition: unknown,
+    columnOrExpr: ColumnName<DB, T> | Expression | string,
+    op?: WhereOp,
+    value?: Param | Expression | [Param | Expression, Param | Expression],
   ): this {
     if (condition) {
-      this._wheres.push(buildWhereClause(column, op, value));
+      this._wheres.push(buildWhereClause(columnOrExpr, op, value));
     }
     return this;
   }
@@ -281,6 +290,27 @@ export class SelectBuilder<
   /** Shorthand for ANY LEFT JOIN (ClickHouse-specific). */
   anyLeftJoin(table: string, alias: string | undefined, onLeft: string, onRight: string): this {
     return this.join('ANY LEFT JOIN', table, alias, onLeft, onRight);
+  }
+
+  /** Add an ARRAY JOIN clause (ClickHouse-specific). */
+  arrayJoin(expr: string | Expression, alias?: string): this {
+    this._arrayJoins.push({
+      expr: expr instanceof Expression ? expr.sql : expr,
+      alias,
+      params: expr instanceof Expression ? [...expr.params] : [],
+    });
+    return this;
+  }
+
+  /** Add a LEFT ARRAY JOIN clause (ClickHouse-specific, preserves rows with empty arrays). */
+  leftArrayJoin(expr: string | Expression, alias?: string): this {
+    this._arrayJoins.push({
+      expr: expr instanceof Expression ? expr.sql : expr,
+      alias,
+      left: true,
+      params: expr instanceof Expression ? [...expr.params] : [],
+    });
+    return this;
   }
 
   groupBy(...columns: (ColumnName<DB, T> | Expression | string | (ColumnName<DB, T> | Expression | string)[])[]): this {
@@ -424,6 +454,15 @@ export class SelectBuilder<
       } else {
         parts.push(`${j.type} ${joinTable} ON ${j.onLeft} = ${j.onRight}`);
       }
+    }
+
+    for (const aj of this._arrayJoins) {
+      for (const p of aj.params) {
+        ctx.params[p.name] = undefined;
+        ctx.paramTypes.set(p.name, p.type);
+      }
+      const keyword = aj.left ? 'LEFT ARRAY JOIN' : 'ARRAY JOIN';
+      parts.push(aj.alias ? `${keyword} ${aj.expr} AS ${aj.alias}` : `${keyword} ${aj.expr}`);
     }
 
     // PREWHERE (ClickHouse-specific, before WHERE)

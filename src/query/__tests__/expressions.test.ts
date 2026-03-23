@@ -75,12 +75,53 @@ describe('fn — function helpers', () => {
       expect(fn.length('tags').sql).toBe('length(tags)');
     });
 
-    it('has', () => {
+    it('has with string', () => {
       expect(fn.has('tags', "'foo'").sql).toBe("has(tags, 'foo')");
     });
 
-    it('indexOf', () => {
+    it('has with Param', () => {
+      const p = new Param('tag', 'String');
+      const expr = fn.has('tags', p);
+      expect(expr.sql).toBe('has(tags, {tag:String})');
+      expect(expr.params).toHaveLength(1);
+    });
+
+    it('has with Expression', () => {
+      const inner = fn.raw('lower(tag)');
+      expect(fn.has('tags', inner).sql).toBe('has(tags, lower(tag))');
+    });
+
+    it('hasAny with string', () => {
+      expect(fn.hasAny('tags', 'other_tags').sql).toBe('hasAny(tags, other_tags)');
+    });
+
+    it('hasAny with Param', () => {
+      const p = new Param('ids', 'Array(String)');
+      const expr = fn.hasAny('token_ids', p);
+      expect(expr.sql).toBe('hasAny(token_ids, {ids:Array(String)})');
+      expect(expr.params).toHaveLength(1);
+    });
+
+    it('hasAll with string', () => {
+      expect(fn.hasAll('tags', 'required').sql).toBe('hasAll(tags, required)');
+    });
+
+    it('hasAll with Param', () => {
+      const p = new Param('ids', 'Array(String)');
+      const expr = fn.hasAll('token_ids', p);
+      expect(expr.sql).toBe('hasAll(token_ids, {ids:Array(String)})');
+      expect(expr.params).toHaveLength(1);
+    });
+
+    it('indexOf with string', () => {
       expect(fn.indexOf('tags', "'bar'").sql).toBe("indexOf(tags, 'bar')");
+    });
+
+    it('indexOf with Param', () => {
+      const p = new Param('val', 'String');
+      const expr = fn.indexOf('arr', p);
+      expect(expr.sql).toBe('indexOf(arr, {val:String})');
+      expect(expr.params).toHaveLength(1);
     });
   });
 
@@ -133,6 +174,26 @@ describe('fn — function helpers', () => {
       expect(fn.dateDiff('day', 'start_dt', 'end_dt').sql).toBe("dateDiff('day', start_dt, end_dt)");
     });
 
+    it('toYYYYMM', () => {
+      expect(fn.toYYYYMM('dt').sql).toBe('toYYYYMM(dt)');
+    });
+
+    it('toYYYYMMDD', () => {
+      expect(fn.toYYYYMMDD('dt').sql).toBe('toYYYYMMDD(dt)');
+    });
+
+    it('toStartOfInterval', () => {
+      const expr = fn.toStartOfInterval('created_at', fn.interval(15, 'MINUTE'));
+      expect(expr.sql).toBe('toStartOfInterval(created_at, INTERVAL 15 MINUTE)');
+    });
+
+    it('toStartOfInterval with Param interval', () => {
+      const p = new Param('n', 'UInt32');
+      const expr = fn.toStartOfInterval('dt', fn.interval(p, 'HOUR'));
+      expect(expr.sql).toBe('toStartOfInterval(dt, INTERVAL {n:UInt32} HOUR)');
+      expect(expr.params).toHaveLength(1);
+    });
+
     it('toDate', () => {
       expect(fn.toDate('dt').sql).toBe('toDate(dt)');
     });
@@ -176,6 +237,37 @@ describe('fn — function helpers', () => {
     it('multiIf', () => {
       expect(fn.multiIf('x > 10', "'high'", 'x > 5', "'mid'", "'low'").sql)
         .toBe("multiIf(x > 10, 'high', x > 5, 'mid', 'low')");
+    });
+
+    it('greatest with strings', () => {
+      expect(fn.greatest('a', 'b').sql).toBe('greatest(a, b)');
+    });
+
+    it('greatest with number', () => {
+      expect(fn.greatest(0, fn.raw('toInt64(dateDiff(\'second\', a, b))')).sql)
+        .toBe("greatest(0, toInt64(dateDiff('second', a, b)))");
+    });
+
+    it('greatest with Param', () => {
+      const p = new Param('min_val', 'Int64');
+      const expr = fn.greatest('col', p);
+      expect(expr.sql).toBe('greatest(col, {min_val:Int64})');
+      expect(expr.params).toHaveLength(1);
+    });
+
+    it('least with strings', () => {
+      expect(fn.least('a', 'b').sql).toBe('least(a, b)');
+    });
+
+    it('least with number', () => {
+      expect(fn.least('col', 100).sql).toBe('least(col, 100)');
+    });
+
+    it('least with Param', () => {
+      const p = new Param('max_val', 'Int64');
+      const expr = fn.least('col', p);
+      expect(expr.sql).toBe('least(col, {max_val:Int64})');
+      expect(expr.params).toHaveLength(1);
     });
 
     it('coalesce with strings', () => {

@@ -80,6 +80,31 @@ export class Subquery extends Expression {
   }
 }
 
+function variadicFn(name: string, args: (string | number | Expression | Param)[]): Expression {
+  const params: Param[] = [];
+  const parts = args.map((a) => {
+    if (typeof a === 'number') return String(a);
+    if (typeof a === 'string') return a;
+    if (a instanceof Param) {
+      params.push(a);
+      return a.toString();
+    }
+    params.push(...a.params);
+    return a.sql;
+  });
+  return new Expression(`${name}(${parts.join(', ')})`, undefined, params);
+}
+
+function binaryFn(name: string, column: string, element: string | Param | Expression): Expression {
+  if (element instanceof Param) {
+    return new Expression(`${name}(${column}, ${element.toString()})`, undefined, [element]);
+  }
+  if (element instanceof Expression) {
+    return new Expression(`${name}(${column}, ${element.sql})`, undefined, [...element.params]);
+  }
+  return new Expression(`${name}(${column}, ${element})`);
+}
+
 /** ClickHouse function builders. */
 export const fn = {
   argMax(column: string | Expression, versionColumn: string | string[]): Expression {
@@ -168,11 +193,17 @@ export const fn = {
   length(column: string): Expression<number> {
     return new Expression<number>(`length(${column})`);
   },
-  has(column: string, element: string): Expression {
-    return new Expression(`has(${column}, ${element})`);
+  has(column: string, element: string | Param | Expression): Expression {
+    return binaryFn('has', column, element);
   },
-  indexOf(column: string, element: string): Expression {
-    return new Expression(`indexOf(${column}, ${element})`);
+  hasAny(column: string, other: string | Param | Expression): Expression {
+    return binaryFn('hasAny', column, other);
+  },
+  hasAll(column: string, other: string | Param | Expression): Expression {
+    return binaryFn('hasAll', column, other);
+  },
+  indexOf(column: string, element: string | Param | Expression): Expression {
+    return binaryFn('indexOf', column, element);
   },
 
   // --- Map functions ---
@@ -225,6 +256,15 @@ export const fn = {
   dateDiff(unit: string, start: string, end: string): Expression<number> {
     return new Expression<number>(`dateDiff('${unit}', ${start}, ${end})`);
   },
+  toYYYYMM(column: string): Expression<number> {
+    return new Expression<number>(`toYYYYMM(${column})`);
+  },
+  toYYYYMMDD(column: string): Expression<number> {
+    return new Expression<number>(`toYYYYMMDD(${column})`);
+  },
+  toStartOfInterval(column: string, interval: Expression): Expression {
+    return new Expression(`toStartOfInterval(${column}, ${interval.sql})`, undefined, [...interval.params]);
+  },
 
   // --- String functions ---
 
@@ -254,18 +294,13 @@ export const fn = {
     return new Expression(`multiIf(${args.join(', ')})`);
   },
   coalesce(...args: (string | number | Expression | Param)[]): Expression {
-    const params: Param[] = [];
-    const parts = args.map((a) => {
-      if (typeof a === 'number') return String(a);
-      if (typeof a === 'string') return a;
-      if (a instanceof Param) {
-        params.push(a);
-        return a.toString();
-      }
-      params.push(...a.params);
-      return a.sql;
-    });
-    return new Expression(`coalesce(${parts.join(', ')})`, undefined, params);
+    return variadicFn('coalesce', args);
+  },
+  greatest(...args: (string | number | Expression | Param)[]): Expression {
+    return variadicFn('greatest', args);
+  },
+  least(...args: (string | number | Expression | Param)[]): Expression {
+    return variadicFn('least', args);
   },
   ifNull(col: string, defaultValue: string | number | Param | Expression): Expression {
     if (defaultValue instanceof Param) {

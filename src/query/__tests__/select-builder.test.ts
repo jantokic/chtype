@@ -1357,4 +1357,97 @@ describe('SelectBuilder', () => {
       }).toThrow('Param name collision');
     });
   });
+
+  describe('ARRAY JOIN', () => {
+    it('builds ARRAY JOIN', () => {
+      const { sql } = qb.selectFrom('users')
+        .select(['user_id'])
+        .arrayJoin('tags')
+        .compile();
+      expect(sql).toContain('ARRAY JOIN tags');
+    });
+
+    it('builds ARRAY JOIN with alias', () => {
+      const { sql } = qb.selectFrom('users')
+        .select(['user_id'])
+        .arrayJoin('tags', 'tag')
+        .compile();
+      expect(sql).toContain('ARRAY JOIN tags AS tag');
+    });
+
+    it('builds ARRAY JOIN with Expression', () => {
+      const { sql } = qb.selectFrom('users')
+        .select(['user_id'])
+        .arrayJoin(fn.raw('arrayEnumerate(token_ids)'), 'idx')
+        .compile();
+      expect(sql).toContain('ARRAY JOIN arrayEnumerate(token_ids) AS idx');
+    });
+
+    it('builds LEFT ARRAY JOIN', () => {
+      const { sql } = qb.selectFrom('users')
+        .select(['user_id'])
+        .leftArrayJoin('tags', 'tag')
+        .compile();
+      expect(sql).toContain('LEFT ARRAY JOIN tags AS tag');
+    });
+
+    it('ARRAY JOIN propagates params from Expression', () => {
+      const p = qb.param('n', 'UInt32');
+      const { sql, params } = qb.selectFrom('users')
+        .select(['user_id'])
+        .arrayJoin(fn.raw('arraySlice(tags, 1, ', p, ')'), 'tag')
+        .compile();
+      expect(sql).toContain('ARRAY JOIN arraySlice(tags, 1, {n:UInt32}) AS tag');
+      expect(params).toHaveProperty('n');
+    });
+
+    it('LEFT ARRAY JOIN propagates params from Expression', () => {
+      const p = qb.param('n', 'UInt32');
+      const { sql, params } = qb.selectFrom('users')
+        .select(['user_id'])
+        .leftArrayJoin(fn.raw('arraySlice(tags, 1, ', p, ')'), 'tag')
+        .compile();
+      expect(sql).toContain('LEFT ARRAY JOIN arraySlice(tags, 1, {n:UInt32}) AS tag');
+      expect(params).toHaveProperty('n');
+    });
+
+    it('ARRAY JOIN appears after FROM and JOINs', () => {
+      const { sql } = qb.selectFrom('users')
+        .select(['user_id'])
+        .innerJoin('events', 'e', 'users.user_id', 'e.user_id')
+        .arrayJoin('tags', 'tag')
+        .where('user_id', '=', qb.param('id', 'String'))
+        .compile();
+      const lines = sql.split('\n');
+      const joinIdx = lines.findIndex(l => l.includes('INNER JOIN'));
+      const arrayJoinIdx = lines.findIndex(l => l.includes('ARRAY JOIN'));
+      const whereIdx = lines.findIndex(l => l.includes('WHERE'));
+      expect(joinIdx).toBeLessThan(arrayJoinIdx);
+      expect(arrayJoinIdx).toBeLessThan(whereIdx);
+    });
+  });
+
+  describe('whereIf with Expression', () => {
+    it('applies Expression condition when truthy', () => {
+      const { sql } = qb.selectFrom('users')
+        .select(['user_id'])
+        .whereIf(true, or(
+          ['score', '>', qb.param('min', 'Float64')],
+          ['score', '<', qb.param('max', 'Float64')],
+        ))
+        .compile();
+      expect(sql).toContain('WHERE (score > {min:Float64} OR score < {max:Float64})');
+    });
+
+    it('skips Expression condition when falsy', () => {
+      const { sql } = qb.selectFrom('users')
+        .select(['user_id'])
+        .whereIf(false, or(
+          ['score', '>', qb.param('min', 'Float64')],
+          ['score', '<', qb.param('max', 'Float64')],
+        ))
+        .compile();
+      expect(sql).not.toContain('WHERE');
+    });
+  });
 });
